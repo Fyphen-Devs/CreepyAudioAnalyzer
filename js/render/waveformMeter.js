@@ -107,8 +107,28 @@ export function drawWaveformAndMeter({ state, dom, frame }) {
       const rms = Math.sqrt(sumSquares / state.analyser.fftSize);
       currentPeakDb = 20 * Math.log10(rms);
     } else if (standard === "lufs") {
-      const rms = Math.sqrt(sumSquares / state.analyser.fftSize);
-      currentPeakDb = 20 * Math.log10(rms) + 3;
+      // LUFS approximation via frequency domain K-weighting
+      const { freqData, bufferLength, hzPerBin } = frame;
+      let lufsPower = 0;
+      for (let i = 1; i < bufferLength; i++) {
+        let f = i * hzPerBin;
+        let v_db = freqData[i];
+
+        // Simplified K-weighting
+        let weightDb = 0;
+        if (f < 50) weightDb = -60;
+        else if (f < 100) weightDb = -60 + ((f - 50) / 50) * 60;
+        else if (f > 2000) weightDb = 4.0;
+        else weightDb = ((f - 100) / 1900) * 4.0;
+
+        // Convert to power
+        lufsPower += Math.pow(10, (v_db + weightDb) / 10);
+      }
+
+      // Average over bins, convert back to dB
+      let avgPower = lufsPower / bufferLength;
+      // Add subjective offset roughly matching true LUFS scaling
+      currentPeakDb = 10 * Math.log10(avgPower) - 0.691;
     } else {
       currentPeakDb = 20 * Math.log10(maxAbs);
     }
@@ -130,14 +150,16 @@ export function drawWaveformAndMeter({ state, dom, frame }) {
     if (!state.lastClipTime || now - state.lastClipTime > 500) {
       state.lastClipTime = now;
       const timeStr = now.toLocaleTimeString();
-      state.eventLogs.unshift(`[${timeStr}] Clip: +${truePeakDb.toFixed(2)} dB`);
+      state.eventLogs.unshift(
+        `[${timeStr}] Clip: +${truePeakDb.toFixed(2)} dB`,
+      );
       if (state.eventLogs.length > 50) state.eventLogs.pop();
 
       if (dom.clipLogContainer) {
         dom.clipLogContainer.innerHTML = state.eventLogs
           .map(
             (log) =>
-              `<div style="color: ${log.includes('Howling') ? '#fbbf24' : '#ef4444'}; border-bottom: 1px solid var(--border); padding: 2px 0;">${log}</div>`,
+              `<div style="color: ${log.includes("Howling") ? "#fbbf24" : "#ef4444"}; border-bottom: 1px solid var(--border); padding: 2px 0;">${log}</div>`,
           )
           .join("");
       }

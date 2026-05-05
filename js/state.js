@@ -26,6 +26,20 @@ export function createInitialState() {
     toneGain: null,
     tonePan: null,
 
+    // Noise Calibration & Analysis
+    noiseProfile: null,
+    isCalibrating: false,
+    calibrationFrames: 0,
+    calibrationBuffer: null,
+    noiseStats: {
+      avgDb: -100,
+      profileType: "None",
+    },
+    // Spectral Features
+    snapshotBuffer: null,
+    peakHoldBuffer: null,
+    spectrumView: "fft", // fft | oct13 | oct16
+    peakHoldInf: false,
     // FSK Modem
     modemActive: false,
     modemMode: "audible",

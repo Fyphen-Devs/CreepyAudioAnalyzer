@@ -266,6 +266,83 @@
                 border-bottom: 1px solid var(--border);
               "
             >
+              <label>Noise Analysis & Calibration</label>
+              <div style="display: flex; gap: 8px; margin-top: 8px">
+                <button id="btn-calibrate" class="btn" style="flex: 1">
+                  Calibrate Noise
+                </button>
+                <button id="btn-clear-calibrate" class="btn" style="flex: 1">
+                  Clear
+                </button>
+              </div>
+              <div
+                id="noise-stats"
+                style="
+                  margin-top: 8px;
+                  font-family: monospace;
+                  font-size: 0.8rem;
+                  color: var(--text-muted);
+                  line-height: 1.4;
+                "
+              >
+                Profile: None<br />
+                Avg Noise Level: -- dB<br />
+                Type: --
+              </div>
+            </div>
+
+            <div
+              class="setting-group"
+              style="
+                padding-bottom: 12px;
+                border-bottom: 1px solid var(--border);
+              "
+            >
+              <label>Reference Snapshot</label>
+              <div style="display: flex; gap: 8px; margin-top: 8px">
+                <button id="btn-snapshot" class="btn" style="flex: 1">
+                  Take Snapshot
+                </button>
+                <button id="btn-clear-snapshot" class="btn" style="flex: 1">
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-group">
+              <label for="spectrum-view">Spectrum View</label>
+              <select id="spectrum-view">
+                <option value="fft" selected>FFT (High Res)</option>
+                <option value="oct13">1/3 Octave Bands</option>
+                <option value="oct16">1/6 Octave Bands</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  font-size: 0.9rem;
+                "
+              >
+                <span>Infinite Peak Hold</span>
+                <input
+                  type="checkbox"
+                  id="peak-hold-inf"
+                  style="accent-color: var(--accent)"
+                />
+              </label>
+            </div>
+
+            <div
+              class="setting-group"
+              style="
+                padding-bottom: 12px;
+                border-bottom: 1px solid var(--border);
+              "
+            >
               <label>Toggle Visualizers</label>
               <div
                 style="
@@ -487,6 +564,9 @@
                   <option value="sawtooth">Saw</option>
                   <option value="square">Square</option>
                   <option value="triangle">Tri</option>
+                  <option value="white">White Noise</option>
+                  <option value="pink">Pink Noise</option>
+                  <option value="sweep">Sine Sweep</option>
                 </select>
               </div>
               <div style="flex: 1">

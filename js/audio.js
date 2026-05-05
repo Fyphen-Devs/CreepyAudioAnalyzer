@@ -370,26 +370,106 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
     if (!s.audioCtx) return;
 
     if (s.toneEnabled) {
-      if (!s.toneOsc) {
-        s.toneOsc = s.audioCtx.createOscillator();
-        s.toneGain = s.audioCtx.createGain();
-        s.tonePan = s.audioCtx.createStereoPanner();
+      // Need to re-create if switching between noise (BufferSource) and oscillator
+      let type = d.toneType.value || "sine";
+      let isNoise = type === "white" || type === "pink";
+      let currentIsNoise = s.toneOsc && !s.toneOsc.frequency;
 
-        s.toneOsc.connect(s.tonePan);
-        s.tonePan.connect(s.toneGain);
-
-        s.toneGain.connect(s.audioCtx.destination);
-
-        s.toneOsc.frequency.value = parseFloat(d.toneFreq.value);
-        s.toneOsc.start();
+      if (s.toneOsc && isNoise !== currentIsNoise) {
+        try {
+          s.toneOsc.stop();
+        } catch (e) {}
+        s.toneOsc.disconnect();
+        s.toneOsc = null;
       }
 
-      s.toneOsc.type = d.toneType.value || "sine";
-      s.toneOsc.frequency.setTargetAtTime(
-        parseFloat(d.toneFreq.value),
-        s.audioCtx.currentTime,
-        0.05,
-      );
+      if (!s.toneOsc) {
+        s.toneGain = s.audioCtx.createGain();
+        s.tonePan = s.audioCtx.createStereoPanner();
+        s.tonePan.connect(s.toneGain);
+        s.toneGain.connect(s.audioCtx.destination);
+
+        if (isNoise) {
+          const bufferSize = 2 * s.audioCtx.sampleRate; // 2 seconds
+          const noiseBuffer = s.audioCtx.createBuffer(
+            1,
+            bufferSize,
+            s.audioCtx.sampleRate,
+          );
+          const output = noiseBuffer.getChannelData(0);
+
+          if (type === "white") {
+            for (let i = 0; i < bufferSize; i++) {
+              output[i] = Math.random() * 2 - 1;
+            }
+          } else {
+            // Simplified Pink Noise
+            let b0 = 0,
+              b1 = 0,
+              b2 = 0,
+              b3 = 0,
+              b4 = 0,
+              b5 = 0,
+              b6 = 0;
+            for (let i = 0; i < bufferSize; i++) {
+              let white = Math.random() * 2 - 1;
+              b0 = 0.99886 * b0 + white * 0.0555179;
+              b1 = 0.99332 * b1 + white * 0.0750759;
+              b2 = 0.969 * b2 + white * 0.153852;
+              b3 = 0.8665 * b3 + white * 0.3104856;
+              b4 = 0.55 * b4 + white * 0.5329522;
+              b5 = -0.7616 * b5 - white * 0.016898;
+              output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+              output[i] *= 0.11; // gain compensation
+              b6 = white * 0.115926;
+            }
+          }
+
+          s.toneOsc = s.audioCtx.createBufferSource();
+          s.toneOsc.buffer = noiseBuffer;
+          s.toneOsc.loop = true;
+          s.toneOsc.connect(s.tonePan);
+          s.toneOsc.start();
+        } else {
+          s.toneOsc = s.audioCtx.createOscillator();
+          s.toneOsc.connect(s.tonePan);
+          s.toneOsc.frequency.value = parseFloat(d.toneFreq.value);
+          s.toneOsc.start();
+        }
+      }
+
+      if (s.toneOsc.frequency) {
+        if (type === "sweep") {
+          s.toneOsc.type = "sine";
+          // Start 3-second sweep
+          const now = s.audioCtx.currentTime;
+          s.toneOsc.frequency.cancelScheduledValues(now);
+          s.toneOsc.frequency.setValueAtTime(20, now);
+          s.toneOsc.frequency.exponentialRampToValueAtTime(20000, now + 3);
+
+          if (!s.sweepInterval) {
+            s.sweepInterval = setInterval(() => {
+              const t = s.audioCtx.currentTime;
+              if (!s.toneOsc || !s.toneOsc.frequency) return;
+              s.toneOsc.frequency.cancelScheduledValues(t);
+              s.toneOsc.frequency.setValueAtTime(20, t);
+              s.toneOsc.frequency.exponentialRampToValueAtTime(20000, t + 3);
+            }, 3500);
+          }
+        } else {
+          s.toneOsc.type = type;
+          if (s.sweepInterval) {
+            clearInterval(s.sweepInterval);
+            s.sweepInterval = null;
+          }
+          s.toneOsc.frequency.cancelScheduledValues(s.audioCtx.currentTime);
+          s.toneOsc.frequency.setTargetAtTime(
+            parseFloat(d.toneFreq.value),
+            s.audioCtx.currentTime,
+            0.05,
+          );
+        }
+      }
 
       let panVal = parseFloat(d.tonePan.value);
       s.tonePan.pan.setTargetAtTime(panVal, s.audioCtx.currentTime, 0.05);
@@ -399,12 +479,16 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       s.toneGain.gain.setTargetAtTime(linearGain, s.audioCtx.currentTime, 0.05);
     } else {
       if (s.toneOsc) {
+        if (s.sweepInterval) {
+          clearInterval(s.sweepInterval);
+          s.sweepInterval = null;
+        }
         try {
           s.toneOsc.stop();
         } catch (e) {}
         s.toneOsc.disconnect();
-        s.toneGain.disconnect();
-        s.tonePan.disconnect();
+        if (s.toneGain) s.toneGain.disconnect();
+        if (s.tonePan) s.tonePan.disconnect();
         s.toneOsc = null;
         s.toneGain = null;
         s.tonePan = null;

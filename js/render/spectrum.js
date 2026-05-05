@@ -215,7 +215,9 @@ export function drawSpectrum({ state, dom, frame }) {
   gl.clearColor(0.0, 0.0, 0.0, 0.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  if (!state.spectrumView || state.spectrumView === "fft") {
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
 
   // -- CPU Overlay Rendering --
   ctxOvl.save();
@@ -226,6 +228,119 @@ export function drawSpectrum({ state, dom, frame }) {
     dom.canvasSpectrumOverlay.width,
     dom.canvasSpectrumOverlay.height,
   );
+  const dpr = window.devicePixelRatio || 1;
+  ctxOvl.scale(dpr, dpr);
+
+  if (!state.peakHoldBuffer || state.peakHoldBuffer.length !== bufferLength) {
+    state.peakHoldBuffer = new Float32Array(bufferLength).fill(-200);
+  }
+
+  for (let i = 0; i < bufferLength; i++) {
+    if (freqData[i] > state.peakHoldBuffer[i]) {
+      state.peakHoldBuffer[i] = freqData[i];
+    } else if (!state.peakHoldInf) {
+      state.peakHoldBuffer[i] -= 0.5; // decay
+    }
+  }
+
+  // Draw Octave Bands if needed
+  if (state.spectrumView === "oct13" || state.spectrumView === "oct16") {
+    const fraction = state.spectrumView === "oct13" ? 3 : 6;
+    const bandStep = Math.pow(2, 1 / fraction);
+
+    let fStart = 20;
+    while (fStart < maxFreqLog) {
+      let fEnd = fStart * bandStep;
+      if (fEnd > maxFreqLog) fEnd = maxFreqLog;
+
+      let binStart = Math.floor(fStart / hzPerBin);
+      let binEnd = Math.ceil(fEnd / hzPerBin);
+
+      if (binStart >= bufferLength) break;
+      if (binEnd > bufferLength) binEnd = bufferLength;
+      if (binStart === binEnd) binEnd = binStart + 1;
+
+      // avg energy for band
+      let sumPower = 0;
+      for (let i = binStart; i < binEnd; i++) {
+        sumPower += Math.pow(10, freqData[i] / 10);
+      }
+      let avgDb = 10 * Math.log10(sumPower / (binEnd - binStart));
+      if (isNaN(avgDb)) avgDb = minDb;
+
+      let _p = (avgDb - minDb) / dbRange;
+      if (_p < 0) _p = 0;
+      else if (_p > 1) _p = 1;
+      let bandH = _p * hSpec;
+
+      let xStart, xEnd;
+      if (useLogScale) {
+        xStart = (Math.log10(fStart / minFreqLog) / logMaxMinRatio) * wSpec;
+        xEnd = (Math.log10(fEnd / minFreqLog) / logMaxMinRatio) * wSpec;
+      } else {
+        xStart = ((fStart - minFreqLog) / linearRange) * wSpec;
+        xEnd = ((fEnd - minFreqLog) / linearRange) * wSpec;
+      }
+
+      ctxOvl.fillStyle = "rgba(120, 160, 255, 0.7)";
+      ctxOvl.fillRect(
+        xStart,
+        hSpec - bandH,
+        Math.max(1, xEnd - xStart - 1),
+        bandH,
+      );
+
+      fStart = fEnd;
+    }
+  }
+
+  // Helper macro for drawing lines
+  const drawLine = (dataArray, color, dash = []) => {
+    ctxOvl.beginPath();
+    ctxOvl.strokeStyle = color;
+    ctxOvl.lineWidth = 1.5;
+    ctxOvl.setLineDash(dash);
+
+    for (let x = 0; x < wSpec; x += 2) {
+      let pc = x / wSpec;
+      let freqIndex;
+      if (useLogScale) {
+        let freq = Math.pow(10, pc * logMaxMinRatio + logMinFreq);
+        freqIndex = freq / hzPerBin;
+      } else {
+        let freq = minFreqLog + pc * linearRange;
+        freqIndex = freq / hzPerBin;
+      }
+
+      if (freqIndex >= 0 && freqIndex < bufferLength) {
+        let i0 = Math.floor(freqIndex);
+        let val = dataArray[i0];
+        let p = (val - minDb) / dbRange;
+        if (p < 0) p = 0;
+        else if (p > 1) p = 1;
+        let y = hSpec - p * hSpec;
+
+        if (x === 0) ctxOvl.moveTo(x, y);
+        else ctxOvl.lineTo(x, y);
+      }
+    }
+    ctxOvl.stroke();
+    ctxOvl.setLineDash([]);
+  };
+
+  // Draw Peak Hold
+  drawLine(state.peakHoldBuffer, "rgba(200, 200, 200, 0.5)");
+
+  // Draw Snapshot
+  if (state.snapshotBuffer) {
+    drawLine(state.snapshotBuffer, "rgba(56, 189, 248, 0.9)", [5, 5]); // Cyan dashed
+  }
+
+  // Draw Noise Profile
+  if (state.noiseProfile) {
+    drawLine(state.noiseProfile, "rgba(239, 68, 68, 0.7)", [4, 4]); // Red dashed
+  }
+
   ctxOvl.restore();
 
   const howlingEnabled = dom.howlingWarning !== null;

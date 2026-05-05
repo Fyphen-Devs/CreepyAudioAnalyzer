@@ -18,6 +18,16 @@ export function getDomRefs() {
     channelsText: document.getElementById("audio-channels"),
     deviceNameText: document.getElementById("audio-device-name"),
 
+    // Noise
+    btnCalibrate: document.getElementById("btn-calibrate"),
+    btnClearCalibrate: document.getElementById("btn-clear-calibrate"),
+    noiseStats: document.getElementById("noise-stats"),
+
+    btnSnapshot: document.getElementById("btn-snapshot"),
+    btnClearSnapshot: document.getElementById("btn-clear-snapshot"),
+    spectrumView: document.getElementById("spectrum-view"),
+    peakHoldInf: document.getElementById("peak-hold-inf"),
+
     fftSizeSelect: document.getElementById("fft-size"),
     specThemeSelect: document.getElementById("spec-theme"),
     specModeSelect: document.getElementById("spec-mode"),

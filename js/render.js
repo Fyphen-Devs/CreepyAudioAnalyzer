@@ -81,6 +81,74 @@ function buildFrameData({ state, dom }) {
   };
 }
 
+function processCalibration(state, dom, freqData) {
+  if (!state.isCalibrating) return;
+
+  const framesToCalibrate = 60; // 1 second roughly at 60fps
+  const bufferLength = state.analyser.frequencyBinCount;
+
+  // Accumulate
+  for (let i = 0; i < bufferLength; i++) {
+    // Math.pow(10, db/10) to average in linear power scale might be better,
+    // but averaging Db directly is often used for a visual noise floor.
+    state.calibrationBuffer[i] += freqData[i];
+  }
+
+  state.calibrationFrames++;
+
+  if (state.calibrationFrames >= framesToCalibrate) {
+    state.isCalibrating = false;
+    state.noiseProfile = new Float32Array(bufferLength);
+    let totalDb = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+      state.noiseProfile[i] = state.calibrationBuffer[i] / framesToCalibrate;
+      totalDb += state.noiseProfile[i];
+    }
+
+    state.noiseStats.avgDb = totalDb / bufferLength;
+
+    // Simple profile analysis
+    let type = "Unknown";
+    // Calculate slopes
+    let lowEnergy = 0,
+      midEnergy = 0,
+      highEnergy = 0;
+    const third = Math.floor(bufferLength / 3);
+    for (let i = 0; i < third; i++) lowEnergy += state.noiseProfile[i];
+    for (let i = third; i < third * 2; i++) midEnergy += state.noiseProfile[i];
+    for (let i = third * 2; i < bufferLength; i++)
+      highEnergy += state.noiseProfile[i];
+
+    lowEnergy /= third;
+    midEnergy /= third;
+    highEnergy /= bufferLength - 2 * third;
+
+    if (lowEnergy > midEnergy + 5 && midEnergy > highEnergy + 5) {
+      type = "Pink / Brown or Mech. Hum";
+    } else if (
+      Math.abs(lowEnergy - midEnergy) < 5 &&
+      Math.abs(midEnergy - highEnergy) < 5
+    ) {
+      type = "White / Flat";
+    } else if (lowEnergy > midEnergy + 10) {
+      type = "Low Frequency / Mains Hum";
+    } else {
+      type = "Complex Environmental";
+    }
+
+    state.noiseStats.profileType = type;
+
+    if (dom.btnCalibrate) {
+      dom.btnCalibrate.textContent = "Calibrate Noise";
+      dom.btnCalibrate.disabled = false;
+    }
+    if (dom.noiseStats) {
+      dom.noiseStats.innerHTML = `Profile: Setup<br/>Avg Noise Level: ${state.noiseStats.avgDb.toFixed(1)} dB<br/>Type: ${type}`;
+    }
+  }
+}
+
 export function createRenderer({ state, dom }) {
   function draw(timestamp = 0, force = false) {
     if (!force && !state.isRunning) return;
@@ -110,6 +178,10 @@ export function createRenderer({ state, dom }) {
     let t0 = performance.now();
 
     const frame = buildFrameData({ state, dom });
+
+    if (!state.isFrozen && state.isCalibrating) {
+      processCalibration(state, dom, frame.freqData);
+    }
 
     drawSpectrum({ state, dom, frame });
     drawWaveformAndMeter({ state, dom, frame });

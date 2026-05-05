@@ -27,6 +27,10 @@ export function initApp() {
     state.config.specTheme = dom.specThemeSelect?.value || "classic";
     state.config.updateRateFps =
       parseInt(dom.updateRateSelect?.value, 10) || 60;
+
+    if (dom.spectrumView) state.spectrumView = dom.spectrumView.value;
+    if (dom.peakHoldInf) state.peakHoldInf = dom.peakHoldInf.checked;
+
     console.log(
       "syncConfig",
       state.config.freqMinLog,
@@ -44,6 +48,8 @@ export function initApp() {
     dom.specModeSelect,
     dom.specThemeSelect,
     dom.updateRateSelect,
+    dom.spectrumView,
+    dom.peakHoldInf,
   ].forEach((el) => {
     if (el) {
       el.addEventListener("input", syncConfig);
@@ -146,6 +152,45 @@ export function initApp() {
         dom.btnFreeze.style.background = "";
         dom.btnFreeze.style.color = "";
       }
+    });
+  }
+
+  if (dom.btnCalibrate) {
+    dom.btnCalibrate.addEventListener("click", () => {
+      if (!state.analyser) {
+        alert("Please start the microphone first to calibrate.");
+        return;
+      }
+      state.isCalibrating = true;
+      state.calibrationFrames = 0;
+      state.calibrationBuffer = new Float32Array(
+        state.analyser.frequencyBinCount,
+      );
+      dom.btnCalibrate.textContent = "Calibrating...";
+      dom.btnCalibrate.disabled = true;
+    });
+  }
+
+  if (dom.btnClearCalibrate) {
+    dom.btnClearCalibrate.addEventListener("click", () => {
+      state.noiseProfile = null;
+      state.noiseStats = { avgDb: -100, profileType: "None" };
+      if (dom.noiseStats) {
+        dom.noiseStats.innerHTML = `Profile: None<br/>Avg Noise Level: -- dB<br/>Type: --`;
+      }
+    });
+  }
+
+  if (dom.btnSnapshot) {
+    dom.btnSnapshot.addEventListener("click", () => {
+      if (!state.freqDataBuffer) return;
+      state.snapshotBuffer = new Float32Array(state.freqDataBuffer);
+    });
+  }
+
+  if (dom.btnClearSnapshot) {
+    dom.btnClearSnapshot.addEventListener("click", () => {
+      state.snapshotBuffer = null;
     });
   }
 
