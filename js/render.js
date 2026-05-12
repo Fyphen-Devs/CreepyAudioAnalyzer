@@ -27,66 +27,58 @@ function buildFrameData({ state, dom }) {
   const freqData = state.freqDataBuffer;
 
   if (
-      !state.timeDataBufferL ||
-      state.timeDataBufferL.length !== state.analyser.fftSize
-    ) {
-      state.timeDataBufferL = new Float32Array(state.analyser.fftSize);
-      state.timeDataBufferR = new Float32Array(state.analyser.fftSize);
-    }
-    const timeDataL = state.timeDataBufferL;
-    const timeDataR = state.timeDataBufferR;
+    !state.timeDataBuffer ||
+    state.timeDataBuffer.length !== state.analyser.fftSize
+  ) {
+    state.timeDataBuffer = new Float32Array(state.analyser.fftSize);
+  }
+  const timeData = state.timeDataBuffer;
 
-    if (!state.isFrozen) {
-      if (state.wasmFft) {
-        // timeDataを取得してWASMのFFTにかける
-        state.analyserL.getFloatTimeDomainData(timeDataL);
-        state.analyserR.getFloatTimeDomainData(timeDataR);
-        state.wasmFft.set_stereo_input(timeDataL, timeDataR);
+  if (!state.isFrozen) {
+    if (state.wasmFft) {
+      // timeDataを取得してWASMのFFTにかける
+      state.analyser.getFloatTimeDomainData(timeData);
+      state.wasmFft.set_input(timeData);
+      state.wasmFft.process();
 
-        const alpha = state.analyser.smoothingTimeConstant;
-        state.wasmFft.process(alpha); // Coherenceも内部で平滑化しています
+      // WASMのメモリからマグニチュードとフェーズを取得
+      const magnitudePtr = state.wasmFft.magnitude_ptr();
+      const phasePtr = state.wasmFft.phase_ptr();
 
-        // WASMのメモリからマグニチュードとフェーズとコヒーレンスを取得
-        const magnitudePtr = state.wasmFft.magnitude_ptr();
-        const phasePtr = state.wasmFft.phase_ptr();
-        const coherencePtr = state.wasmFft.coherence_ptr();
+      const wasmMagBuf = new Float32Array(
+        state.wasmMemory.buffer,
+        magnitudePtr,
+        timeData.length,
+      );
+      const wasmPhaseBuf = new Float32Array(
+        state.wasmMemory.buffer,
+        phasePtr,
+        timeData.length,
+      );
 
-        const wasmMagBuf = new Float32Array(
-          state.wasmMemory.buffer,
-          magnitudePtr,
-          timeDataL.length,
-        );
-        const wasmPhaseBuf = new Float32Array(
-          state.wasmMemory.buffer,
-          phasePtr,
-          timeDataL.length,
-        );
-        const wasmCoherenceBuf = new Float32Array(
-          state.wasmMemory.buffer,
-          coherencePtr,
-          timeDataL.length,
-        );
+      const alpha = state.analyser.smoothingTimeConstant;
+      const N = timeData.length;
 
-        const N = timeDataL.length;
+      for (let i = 0; i < freqData.length; i++) {
+        // Nで割って正規化 (窓関数のゲイン補正も含むとベターだが、ここでは簡易的にNのみ)
+        let mag = wasmMagBuf[i] / N;
+        if (mag < 1e-10) mag = 1e-10;
 
-        for (let i = 0; i < freqData.length; i++) {
-          let mag = wasmMagBuf[i] / (N * 0.5); // 窓関数のゲイン補正を含めてスケール調整
-          if (mag < 1e-10) mag = 1e-10;
-          
-          let db = 20 * Math.log10(mag);
+        let db = 20 * Math.log10(mag);
 
-          if (freqData[i] === undefined || !isFinite(freqData[i])) {
-            freqData[i] = db;
-          } else {
-            freqData[i] = alpha * freqData[i] + (1 - alpha) * db;
-          }
+        // スムージング処理 (前回の値とブレンド)
+        if (freqData[i] === undefined || !isFinite(freqData[i])) {
+          freqData[i] = db;
+        } else {
+          freqData[i] = alpha * freqData[i] + (1 - alpha) * db;
         }
-        
-        // --- WASM Coherence Buffer は wasmCoherenceBuf に展開されています（[0.0 ~ 1.0]） ---
-        // UIに反映する場合は、ここにロジックを追加します
-      } else {
-        state.analyser.getFloatFrequencyData(freqData);
-        state.analyserL.getFloatTimeDomainData(timeDataL);
+      }
+
+      // ※位相同期などの高度な処理（Vectorscope等）は wasmPhaseBuf を利用できます。
+    } else {
+      state.analyser.getFloatFrequencyData(freqData);
+      state.analyser.getFloatTimeDomainData(timeData);
+    }
   }
 
   const minDb = state.analyser.minDecibels;
