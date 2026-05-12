@@ -27,16 +27,66 @@ function buildFrameData({ state, dom }) {
   const freqData = state.freqDataBuffer;
 
   if (
-    !state.timeDataBuffer ||
-    state.timeDataBuffer.length !== state.analyser.fftSize
-  ) {
-    state.timeDataBuffer = new Float32Array(state.analyser.fftSize);
-  }
-  const timeData = state.timeDataBuffer;
+      !state.timeDataBufferL ||
+      state.timeDataBufferL.length !== state.analyser.fftSize
+    ) {
+      state.timeDataBufferL = new Float32Array(state.analyser.fftSize);
+      state.timeDataBufferR = new Float32Array(state.analyser.fftSize);
+    }
+    const timeDataL = state.timeDataBufferL;
+    const timeDataR = state.timeDataBufferR;
 
-  if (!state.isFrozen) {
-    state.analyser.getFloatFrequencyData(freqData);
-    state.analyser.getFloatTimeDomainData(timeData);
+    if (!state.isFrozen) {
+      if (state.wasmFft) {
+        // timeDataを取得してWASMのFFTにかける
+        state.analyserL.getFloatTimeDomainData(timeDataL);
+        state.analyserR.getFloatTimeDomainData(timeDataR);
+        state.wasmFft.set_stereo_input(timeDataL, timeDataR);
+
+        const alpha = state.analyser.smoothingTimeConstant;
+        state.wasmFft.process(alpha); // Coherenceも内部で平滑化しています
+
+        // WASMのメモリからマグニチュードとフェーズとコヒーレンスを取得
+        const magnitudePtr = state.wasmFft.magnitude_ptr();
+        const phasePtr = state.wasmFft.phase_ptr();
+        const coherencePtr = state.wasmFft.coherence_ptr();
+
+        const wasmMagBuf = new Float32Array(
+          state.wasmMemory.buffer,
+          magnitudePtr,
+          timeDataL.length,
+        );
+        const wasmPhaseBuf = new Float32Array(
+          state.wasmMemory.buffer,
+          phasePtr,
+          timeDataL.length,
+        );
+        const wasmCoherenceBuf = new Float32Array(
+          state.wasmMemory.buffer,
+          coherencePtr,
+          timeDataL.length,
+        );
+
+        const N = timeDataL.length;
+
+        for (let i = 0; i < freqData.length; i++) {
+          let mag = wasmMagBuf[i] / (N * 0.5); // 窓関数のゲイン補正を含めてスケール調整
+          if (mag < 1e-10) mag = 1e-10;
+          
+          let db = 20 * Math.log10(mag);
+
+          if (freqData[i] === undefined || !isFinite(freqData[i])) {
+            freqData[i] = db;
+          } else {
+            freqData[i] = alpha * freqData[i] + (1 - alpha) * db;
+          }
+        }
+        
+        // --- WASM Coherence Buffer は wasmCoherenceBuf に展開されています（[0.0 ~ 1.0]） ---
+        // UIに反映する場合は、ここにロジックを追加します
+      } else {
+        state.analyser.getFloatFrequencyData(freqData);
+        state.analyserL.getFloatTimeDomainData(timeDataL);
   }
 
   const minDb = state.analyser.minDecibels;

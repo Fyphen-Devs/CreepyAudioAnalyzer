@@ -96,10 +96,26 @@ header h1 {
 
 .sidebar {
   width: 280px;
+  flex: 0 0 280px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
+  transition:
+    flex-basis 0.3s ease,
+    width 0.3s ease,
+    padding 0.3s ease,
+    opacity 0.3s ease,
+    margin 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 0;
+  flex-basis: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .sidebar::-webkit-scrollbar {

@@ -1,0 +1,8 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^powershell -c \"\\(Get-Content \\.\\./js/audio\\.js\\) \\| Select-String -Pattern 'state\\.analyser\\.fftSize = parseInt' -Context 0,7\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
+}

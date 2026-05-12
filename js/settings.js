@@ -90,8 +90,16 @@ export function bindSettings({
   });
 
   dom.fftSizeSelect.addEventListener("change", () => {
-    if (state.analyser)
-      state.analyser.fftSize = parseInt(dom.fftSizeSelect.value, 10);
+    const size = parseInt(dom.fftSizeSelect.value, 10);
+    if (state.analyser) {
+      state.analyser.fftSize = size;
+      state.analyserL.fftSize = size;
+      state.analyserR.fftSize = size;
+    }
+    if (state.WasmFftClass) {
+      if (state.wasmFft) state.wasmFft.free();
+      state.wasmFft = new state.WasmFftClass(size);
+    }
   });
 
   dom.smoothingInput.addEventListener("input", () => {

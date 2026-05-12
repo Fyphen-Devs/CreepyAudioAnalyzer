@@ -7,9 +7,24 @@ import { createRenderer } from "./render.js";
 import { startTransmission } from "./modem.js";
 import { drawTextToAudioBuffer } from "./spectrogramDraw.js";
 
-export function initApp() {
+import initWasm, { WasmFft } from "../wasm-fft/pkg/wasm_fft.js";
+
+export async function initApp() {
+  const wasmInstance = await initWasm();
+
   const dom = getDomRefs();
   const state = createInitialState();
+  state.wasmMemory = wasmInstance.memory;
+  state.WasmFftClass = WasmFft;
+
+  const toggleBtn = document.getElementById("btn-toggle-sidebar");
+  const sidebar = document.querySelector(".sidebar");
+  if (toggleBtn && sidebar) {
+    toggleBtn.addEventListener("click", () => {
+      sidebar.classList.toggle("collapsed");
+      setTimeout(() => resizeCanvases(dom), 300); // Wait for transition
+    });
+  }
 
   function syncConfig() {
     if (!state.config) return;

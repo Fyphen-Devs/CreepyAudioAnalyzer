@@ -100,6 +100,10 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       state.analyserL.fftSize = state.analyser.fftSize;
       state.analyserR.fftSize = state.analyser.fftSize;
 
+      if (state.wasmFft) state.wasmFft.free();
+      if (state.WasmFftClass)
+        state.wasmFft = new state.WasmFftClass(state.analyser.fftSize);
+
       state.analyser.smoothingTimeConstant = parseFloat(
         dom.smoothingInput.value,
       );

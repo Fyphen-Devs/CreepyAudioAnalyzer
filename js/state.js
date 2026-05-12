@@ -7,6 +7,9 @@ export function createInitialState() {
     splitter: null,
     source: null,
     stream: null,
+    wasmFft: null,
+    wasmMemory: null,
+    WasmFftClass: null,
     animationId: null,
 
     isRunning: false,
