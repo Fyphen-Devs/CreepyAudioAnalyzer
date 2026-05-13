@@ -1,0 +1,15 @@
+{
+  "name": "wasm-fft",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "wasm_fft_bg.wasm",
+    "wasm_fft.js",
+    "wasm_fft.d.ts"
+  ],
+  "main": "wasm_fft.js",
+  "types": "wasm_fft.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
