@@ -1,6 +1,7 @@
-const CACHE_NAME = "audio-analyzer-v2";
+const CACHE_NAME = "audio-analyzer-v3";
 const ASSETS = [
   "./",
+  "./script.js",
   "./index.html",
   "./style.css",
   "./js/app.js",
@@ -16,6 +17,8 @@ const ASSETS = [
   "./js/render/spectrum.js",
   "./js/render/vectorscope.js",
   "./js/render/waveformMeter.js",
+  "./wasm-fft/pkg/wasm_fft.js",
+  "./wasm-fft/pkg/wasm_fft_bt.wasm",
   "./manifest.json",
 ];
 
