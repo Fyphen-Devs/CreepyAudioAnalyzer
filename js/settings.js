@@ -9,11 +9,13 @@ export function bindSettings({
   const toggleSpectrogram = document.getElementById("toggle-spectrogram");
   const toggleOscilloscope = document.getElementById("toggle-oscilloscope");
   const toggleVectorscope = document.getElementById("toggle-vectorscope");
+  const toggleAudioFsa = document.getElementById("toggle-audio-fsa");
 
   const cardFsa = document.getElementById("card-fsa");
   const cardSpectrogram = document.getElementById("card-spectrogram");
   const cardOscilloscope = document.getElementById("card-oscilloscope");
   const cardVectorscope = document.getElementById("card-vectorscope");
+  const cardAudioFsa = document.getElementById("card-audio-fsa");
 
   function updateCardVisibility() {
     if (toggleFsa && cardFsa)
@@ -26,6 +28,9 @@ export function bindSettings({
     }
     if (toggleVectorscope && cardVectorscope) {
       cardVectorscope.style.display = toggleVectorscope.checked ? "" : "none";
+    }
+    if (toggleAudioFsa && cardAudioFsa) {
+      cardAudioFsa.style.display = toggleAudioFsa.checked ? "" : "none";
     }
 
     requestAnimationFrame(() => {
@@ -42,6 +47,9 @@ export function bindSettings({
   }
   if (toggleVectorscope) {
     toggleVectorscope.addEventListener("change", updateCardVisibility);
+  }
+  if (toggleAudioFsa) {
+    toggleAudioFsa.addEventListener("change", updateCardVisibility);
   }
 
   if (dom.micSelect) {
