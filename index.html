@@ -1308,6 +1308,54 @@
         });
       }
     </script>
+    <div id="bottom-music-player">
+      <div id="bmp-header">
+        <span class="bmp-title">Audio Player</span>
+        <button id="bmp-toggle-btn">▼</button>
+      </div>
+      <div id="bmp-body">
+        <div class="bmp-controls">
+          <label for="bmp-upload" class="bmp-btn bmp-btn-upload"
+            >+ Add Queue</label
+          >
+          <input
+            type="file"
+            id="bmp-upload"
+            multiple
+            accept="audio/*"
+            style="display: none"
+          />
+
+          <button id="bmp-prev" class="bmp-btn" disabled>⏮</button>
+          <button id="bmp-play" class="bmp-btn-main" disabled>▶</button>
+          <button id="bmp-next" class="bmp-btn" disabled>⏭</button>
+        </div>
+
+        <div class="bmp-info">
+          <div id="bmp-track-name">No track loaded</div>
+          <div class="bmp-progress-container">
+            <span id="bmp-time-current">0:00</span>
+            <input
+              type="range"
+              id="bmp-progress"
+              min="0"
+              max="100"
+              step="0.1"
+              value="0"
+              disabled
+            />
+            <span id="bmp-time-total">0:00</span>
+          </div>
+        </div>
+
+        <div class="bmp-playlist-section">
+          <div class="bmp-playlist-header">Queue</div>
+          <ul id="bmp-playlist"></ul>
+        </div>
+      </div>
+      <audio id="bmp-audio" style="display: none"></audio>
+    </div>
+
     <script src="script.js"></script>
   </body>
 </html>
