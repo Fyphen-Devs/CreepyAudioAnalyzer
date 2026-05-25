@@ -434,7 +434,7 @@ canvas {
   font-size: 1.2rem;
   cursor: pointer;
   padding: 8px;
-  border-radius: 50%;
+  border-radius: 5%;
   transition: all 0.2s;
   display: flex;
   align-items: center;
