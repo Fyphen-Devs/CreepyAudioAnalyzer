@@ -13,6 +13,7 @@ const ASSETS = [
   "./js/settings.js",
   "./js/spectrogramDraw.js",
   "./js/state.js",
+  "./js/bottomPlayer.js",
   "./js/render/spectrogram.js",
   "./js/render/spectrum.js",
   "./js/render/vectorscope.js",
