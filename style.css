@@ -680,8 +680,10 @@ canvas {
 }
 
 #hover-tooltip {
-  position: fixed;
+  position: fixed; /* or absolute with equivalent container contract */
   display: none;
   pointer-events: none;
   z-index: 1000;
+  transform: translate(-50%, -100%);
+  /* background/text/padding/radius restored */
 }
