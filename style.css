@@ -685,5 +685,6 @@ canvas {
   pointer-events: none;
   z-index: 1000;
   transform: translate(-50%, -100%);
+  background-color: black;
   /* background/text/padding/radius restored */
 }

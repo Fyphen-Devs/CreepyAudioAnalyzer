@@ -34,6 +34,38 @@ function buildFrameData({ state, dom }) {
   }
   const timeData = state.timeDataBuffer;
 
+  // buffers for audio player
+  if (state.audioPlayerAnalyser) {
+    if (
+      !state.audioPlayerFreqDataBuffer ||
+      state.audioPlayerFreqDataBuffer.length !== bufferLength
+    ) {
+      state.audioPlayerFreqDataBuffer = new Float32Array(bufferLength);
+    }
+    if (
+      !state.audioPlayerTimeDataBuffer ||
+      state.audioPlayerTimeDataBuffer.length !==
+        state.audioPlayerAnalyser.fftSize
+    ) {
+      state.audioPlayerTimeDataBuffer = new Float32Array(
+        state.audioPlayerAnalyser.fftSize,
+      );
+    }
+    // coherence buffers
+    if (!state.cohPxx || state.cohPxx.length !== bufferLength) {
+      state.cohPxx = new Float32Array(bufferLength);
+      state.cohPyy = new Float32Array(bufferLength);
+      state.cohPxyReal = new Float32Array(bufferLength);
+      state.cohPxyImag = new Float32Array(bufferLength);
+      state.coherenceData = new Float32Array(bufferLength);
+      state.micWasmMag = new Float32Array(bufferLength * 2);
+      state.micWasmPhase = new Float32Array(bufferLength * 2);
+    }
+  }
+
+  const audioPlayerFreqData = state.audioPlayerFreqDataBuffer;
+  const audioPlayerTimeData = state.audioPlayerTimeDataBuffer;
+
   if (!state.isFrozen) {
     if (state.wasmFft) {
       // timeDataを取得してWASMのFFTにかける
@@ -56,6 +88,12 @@ function buildFrameData({ state, dom }) {
         timeData.length,
       );
 
+      // copy mic data for coherence calculation later
+      if (state.micWasmMag) {
+        state.micWasmMag.set(wasmMagBuf);
+        state.micWasmPhase.set(wasmPhaseBuf);
+      }
+
       const alpha = state.analyser.smoothingTimeConstant;
       const N = timeData.length;
 
@@ -74,10 +112,96 @@ function buildFrameData({ state, dom }) {
         }
       }
 
-      // ※位相同期などの高度な処理（Vectorscope等）は wasmPhaseBuf を利用できます。
+      if (
+        state.audioPlayerAnalyser &&
+        audioPlayerTimeData &&
+        audioPlayerFreqData
+      ) {
+        state.audioPlayerAnalyser.getFloatTimeDomainData(audioPlayerTimeData);
+        state.wasmFft.set_input(audioPlayerTimeData);
+        state.wasmFft.process();
+        const apMagPtr = state.wasmFft.magnitude_ptr();
+        const apPhasePtr = state.wasmFft.phase_ptr();
+        const apWasmMagBuf = new Float32Array(
+          state.wasmMemory.buffer,
+          apMagPtr,
+          audioPlayerTimeData.length,
+        );
+        const apWasmPhaseBuf = new Float32Array(
+          state.wasmMemory.buffer,
+          apPhasePtr,
+          audioPlayerTimeData.length,
+        );
+        const apAlpha = state.audioPlayerAnalyser.smoothingTimeConstant;
+        const apN = audioPlayerTimeData.length;
+
+        for (let i = 0; i < audioPlayerFreqData.length; i++) {
+          let mag = apWasmMagBuf[i] / apN;
+          if (mag < 1e-10) mag = 1e-10;
+          let db = 20 * Math.log10(mag);
+          if (
+            audioPlayerFreqData[i] === undefined ||
+            !isFinite(audioPlayerFreqData[i])
+          ) {
+            audioPlayerFreqData[i] = db;
+          } else {
+            audioPlayerFreqData[i] =
+              apAlpha * audioPlayerFreqData[i] + (1 - apAlpha) * db;
+          }
+
+          // Compute coherence per bin
+          const mX = state.micWasmMag[i] / N;
+          const mY = apWasmMagBuf[i] / apN;
+          const pX = state.micWasmPhase[i];
+          const pY = apWasmPhaseBuf[i];
+
+          // Auto spectra (power)
+          const pXX = mX * mX;
+          const pYY = mY * mY;
+          // Cross spectra (complex)
+          const phaseDiff = pX - pY;
+          const cross = mX * mY;
+          const cReal = cross * Math.cos(phaseDiff);
+          const cImag = cross * Math.sin(phaseDiff);
+
+          const timeCoherenceAlpha = 0.95; // Smoothing for exponential average
+          state.cohPxx[i] =
+            timeCoherenceAlpha * state.cohPxx[i] +
+            (1 - timeCoherenceAlpha) * pXX;
+          state.cohPyy[i] =
+            timeCoherenceAlpha * state.cohPyy[i] +
+            (1 - timeCoherenceAlpha) * pYY;
+          state.cohPxyReal[i] =
+            timeCoherenceAlpha * state.cohPxyReal[i] +
+            (1 - timeCoherenceAlpha) * cReal;
+          state.cohPxyImag[i] =
+            timeCoherenceAlpha * state.cohPxyImag[i] +
+            (1 - timeCoherenceAlpha) * cImag;
+
+          const crossPowerMagSq =
+            state.cohPxyReal[i] ** 2 + state.cohPxyImag[i] ** 2;
+          const autoPowerProd = state.cohPxx[i] * state.cohPyy[i];
+
+          if (autoPowerProd > 1e-20) {
+            state.coherenceData[i] = crossPowerMagSq / autoPowerProd;
+          } else {
+            state.coherenceData[i] = 0;
+          }
+        }
+      }
+
+      // ※位相同期などの高度な処理（Vectorscope等）は wasmPhaseBuf を利用
     } else {
       state.analyser.getFloatFrequencyData(freqData);
       state.analyser.getFloatTimeDomainData(timeData);
+    }
+    if (
+      state.audioPlayerAnalyser &&
+      audioPlayerFreqData &&
+      audioPlayerTimeData
+    ) {
+      state.audioPlayerAnalyser.getFloatFrequencyData(audioPlayerFreqData);
+      state.audioPlayerAnalyser.getFloatTimeDomainData(audioPlayerTimeData);
     }
   }
 
@@ -96,9 +220,22 @@ function buildFrameData({ state, dom }) {
   const logMinFreq = Math.log10(freqMinLog);
   const linearRange = currentMaxFreqLog - freqMinLog;
   const hzPerBinClamped = Math.max(1, hzPerBin);
-  const linearBarWidth = wSpec / (linearRange / hzPerBin);
-  const linearBarWidthActual =
-    linearBarWidth > 2 ? linearBarWidth - 1 : linearBarWidth;
+
+  let linearBarWidthActual = 1;
+
+  if (wSpec > 0) {
+    const linearBarWidth = wSpec / (linearRange / hzPerBin);
+    linearBarWidthActual =
+      linearBarWidth > 2 ? linearBarWidth - 1 : linearBarWidth;
+  }
+
+  let wAudioSpec = 0;
+  let hAudioSpec = 0;
+  if (dom.canvasAudioSpectrum) {
+    const dpr = window.devicePixelRatio || 1;
+    wAudioSpec = dom.canvasAudioSpectrum.width / dpr || 0;
+    hAudioSpec = dom.canvasAudioSpectrum.height / dpr || 0;
+  }
 
   return {
     wSpec,
@@ -120,6 +257,28 @@ function buildFrameData({ state, dom }) {
     linearRange,
     hzPerBinClamped,
     linearBarWidthActual,
+    audioPlayerFrame: {
+      wSpec: wAudioSpec,
+      hSpec: hAudioSpec,
+      wWave,
+      hWave,
+      bufferLength,
+      freqData: audioPlayerFreqData,
+      timeData: audioPlayerTimeData,
+      minDb,
+      maxDb,
+      dbRange,
+      useLogScale,
+      hzPerBin,
+      minFreqLog: freqMinLog,
+      maxFreqLog: currentMaxFreqLog,
+      logMaxMinRatio,
+      logMinFreq,
+      linearRange,
+      hzPerBinClamped,
+      linearBarWidthActual,
+      coherenceData: state.coherenceData,
+    },
   };
 }
 
@@ -225,10 +384,53 @@ export function createRenderer({ state, dom }) {
       processCalibration(state, dom, frame.freqData);
     }
 
-    drawSpectrum({ state, dom, frame });
-    drawWaveformAndMeter({ state, dom, frame });
-    drawSpectrogram({ dom, frame, state });
-    drawVectorscope({ state, dom });
+    const fsaChecked = document.getElementById("toggle-fsa")?.checked;
+    const audioFsaChecked =
+      document.getElementById("toggle-audio-fsa")?.checked;
+    const spectrogramChecked =
+      document.getElementById("toggle-spectrogram")?.checked;
+    const oscilloscopeChecked = document.getElementById(
+      "toggle-oscilloscope",
+    )?.checked;
+    const vectorscopeChecked =
+      document.getElementById("toggle-vectorscope")?.checked;
+
+    if (fsaChecked) {
+      document.getElementById("card-fsa").style.display = "flex";
+      drawSpectrum({ state, dom, frame });
+    } else {
+      document.getElementById("card-fsa").style.display = "none";
+    }
+
+    if (audioFsaChecked) {
+      document.getElementById("card-audio-fsa").style.display = "flex";
+      if (state.audioPlayerAnalyser) {
+        drawSpectrum({ state, dom, frame }, true);
+      }
+    } else {
+      document.getElementById("card-audio-fsa").style.display = "none";
+    }
+
+    if (spectrogramChecked) {
+      document.getElementById("card-spectrogram").style.display = "flex";
+      drawSpectrogram({ dom, frame, state });
+    } else {
+      document.getElementById("card-spectrogram").style.display = "none";
+    }
+
+    if (oscilloscopeChecked) {
+      document.getElementById("card-oscilloscope").style.display = "flex";
+      drawWaveformAndMeter({ state, dom, frame });
+    } else {
+      document.getElementById("card-oscilloscope").style.display = "none";
+    }
+
+    if (vectorscopeChecked) {
+      document.getElementById("card-vectorscope").style.display = "flex";
+      drawVectorscope({ state, dom });
+    } else {
+      document.getElementById("card-vectorscope").style.display = "none";
+    }
 
     if (state.modemActive && state.modemAnalyser) {
       demodulateFrame(state, dom, timestamp);

@@ -97,11 +97,11 @@ export async function initApp() {
     }
   };
 
-  if (dom.canvasSpectrum) {
-    const el = dom.canvasSpectrum;
+  const setupCanvasMouseEvents = (el, isAudioCanvas) => {
     el.addEventListener("mousemove", (e) => {
       state.mouseX = e.offsetX;
       state.mouseY = e.offsetY;
+      state.hoveredIsAudio = isAudioCanvas;
       if (state.isDraggingFilter) {
         state.filterEndX = e.offsetX;
       }
@@ -109,10 +109,12 @@ export async function initApp() {
 
     el.addEventListener("mouseenter", () => {
       state.isHovering = true;
+      state.hoveredIsAudio = isAudioCanvas;
     });
 
     el.addEventListener("mouseleave", () => {
       state.isHovering = false;
+      state.hoveredIsAudio = false;
       state.isDraggingFilter = false;
       if (state.soloGain && state.audioCtx) {
         state.soloGain.gain.cancelScheduledValues(state.audioCtx.currentTime);
@@ -154,6 +156,13 @@ export async function initApp() {
         );
       }
     });
+  };
+
+  if (dom.canvasSpectrum) {
+    setupCanvasMouseEvents(dom.canvasSpectrum, false);
+  }
+  if (dom.canvasAudioSpectrum) {
+    setupCanvasMouseEvents(dom.canvasAudioSpectrum, true);
   }
 
   if (dom.btnFreeze) {

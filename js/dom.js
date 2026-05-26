@@ -122,6 +122,28 @@ export function getDomRefs() {
     canvasVectorscopeOverlay: null, // If needed in future
     ctxVectorscopeOverlay: null,
 
+    canvasAudioSpectrum: document.getElementById("canvas-audio-spectrum"),
+    ctxAudioSpectrum: document.getElementById("canvas-audio-spectrum")
+      ? document
+          .getElementById("canvas-audio-spectrum")
+          .getContext("webgl2", { preserveDrawingBuffer: false }) ||
+        document
+          .getElementById("canvas-audio-spectrum")
+          .getContext("webgl", { preserveDrawingBuffer: false })
+      : null,
+    canvasAudioSpectrumOverlay: document.getElementById(
+      "canvas-audio-spectrum-overlay",
+    ),
+    ctxAudioSpectrumOverlay: document.getElementById(
+      "canvas-audio-spectrum-overlay",
+    )
+      ? document
+          .getElementById("canvas-audio-spectrum-overlay")
+          .getContext("2d")
+      : null,
+
+    bmpAudio: document.getElementById("bmp-audio"),
+
     hoverTooltip: document.getElementById("hover-tooltip"),
     fpsDisplay: document.getElementById("fps-display"),
   };

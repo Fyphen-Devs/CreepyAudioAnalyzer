@@ -2,6 +2,8 @@ export function createInitialState() {
   return {
     audioCtx: null,
     analyser: null,
+    audioPlayerAnalyser: null,
+    audioPlayerSource: null,
     analyserL: null,
     analyserR: null,
     splitter: null,
@@ -59,6 +61,8 @@ export function createInitialState() {
 
     freqDataBuffer: null,
     timeDataBuffer: null,
+    audioPlayerFreqDataBuffer: null,
+    audioPlayerTimeDataBuffer: null,
     timeLBuffer: null,
     timeRBuffer: null,
 

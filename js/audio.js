@@ -110,6 +110,26 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       state.analyser.minDecibels = parseFloat(dom.minDbInput.value);
       state.analyser.maxDecibels = parseFloat(dom.maxDbInput.value);
 
+      // Create a separate analyser for the audio player
+      state.audioPlayerAnalyser = state.audioCtx.createAnalyser();
+      state.audioPlayerAnalyser.fftSize = state.analyser.fftSize;
+      state.audioPlayerAnalyser.smoothingTimeConstant =
+        state.analyser.smoothingTimeConstant;
+      state.audioPlayerAnalyser.minDecibels = state.analyser.minDecibels;
+      state.audioPlayerAnalyser.maxDecibels = state.analyser.maxDecibels;
+
+      // Connect audioPlayer (bmp-audio) to audioPlayerAnalyser
+      if (!state.audioPlayerSource && dom.bmpAudio) {
+        state.audioPlayerSource = state.audioCtx.createMediaElementSource(
+          dom.bmpAudio,
+        );
+      }
+      if (state.audioPlayerSource) {
+        state.audioPlayerSource.disconnect();
+        state.audioPlayerSource.connect(state.audioPlayerAnalyser);
+        state.audioPlayerAnalyser.connect(state.audioCtx.destination);
+      }
+
       // Dedicated FSK Modem analyzer (fast and low res avoids smoothing issues)
       state.modemAnalyser = state.audioCtx.createAnalyser();
       state.modemAnalyser.fftSize = 2048; // Increased from 1024 for narrower frequency bins (better SNR for high pitches)

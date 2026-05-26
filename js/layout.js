@@ -86,4 +86,26 @@ export function resizeCanvases(dom) {
     dom.canvasVectorscope.style.width = vectorscopeRect.width + "px";
     dom.canvasVectorscope.style.height = vectorscopeRect.height + "px";
   }
+
+  if (dom.canvasAudioSpectrum && dom.ctxAudioSpectrum) {
+    const specRect =
+      dom.canvasAudioSpectrum.parentElement.getBoundingClientRect();
+    dom.canvasAudioSpectrum.width = specRect.width * dpr;
+    dom.canvasAudioSpectrum.height = specRect.height * dpr;
+
+    // WebGL viewport
+    dom.ctxAudioSpectrum.viewport(
+      0,
+      0,
+      dom.canvasAudioSpectrum.width,
+      dom.canvasAudioSpectrum.height,
+    );
+
+    if (dom.canvasAudioSpectrumOverlay && dom.ctxAudioSpectrumOverlay) {
+      dom.canvasAudioSpectrumOverlay.width = specRect.width * dpr;
+      dom.canvasAudioSpectrumOverlay.height = specRect.height * dpr;
+      dom.ctxAudioSpectrumOverlay.setTransform(1, 0, 0, 1, 0, 0);
+      dom.ctxAudioSpectrumOverlay.scale(dpr, dpr);
+    }
+  }
 }

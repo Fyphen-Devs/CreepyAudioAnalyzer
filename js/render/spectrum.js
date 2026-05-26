@@ -83,6 +83,8 @@ function initWebGL(gl) {
 
 let webglStateSpec = null;
 let currentU8DataSpec = null;
+const webglStateSpecMap = new Map();
+const currentU8DataSpecMap = new Map();
 
 function setupWebGLSpec(gl) {
   const result = initWebGL(gl);
@@ -97,7 +99,7 @@ function setupWebGLSpec(gl) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-  webglStateSpec = {
+  const stateObj = {
     gl,
     program,
     positionBuffer,
@@ -116,18 +118,26 @@ function setupWebGLSpec(gl) {
       u_hzPerBin: gl.getUniformLocation(program, "u_hzPerBin"),
     },
   };
+  webglStateSpecMap.set(gl, stateObj);
   return true;
 }
 
-export function drawSpectrum({ state, dom, frame }) {
-  if (!dom.ctxSpectrum || !dom.ctxSpectrumOverlay) return;
-  const gl = dom.ctxSpectrum;
-  const ctxOvl = dom.ctxSpectrumOverlay;
+export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
+  const gl = isAudioPlayer ? dom.ctxAudioSpectrum : dom.ctxSpectrum;
+  const ctxOvl = isAudioPlayer
+    ? dom.ctxAudioSpectrumOverlay
+    : dom.ctxSpectrumOverlay;
 
-  if (!webglStateSpec) {
+  if (!gl || !ctxOvl) return;
+
+  if (!webglStateSpecMap.has(gl)) {
     if (!setupWebGLSpec(gl)) return;
   }
-  const ws = webglStateSpec;
+  const ws = webglStateSpecMap.get(gl);
+
+  if (!currentU8DataSpecMap.has(gl)) {
+    currentU8DataSpecMap.set(gl, null);
+  }
 
   const {
     wSpec,
@@ -143,13 +153,15 @@ export function drawSpectrum({ state, dom, frame }) {
     logMaxMinRatio,
     logMinFreq,
     linearRange,
-  } = frame;
+    coherenceData,
+  } = isAudioPlayer ? frame.audioPlayerFrame : frame;
 
   if (wSpec === 0 || hSpec === 0) return;
 
   gl.bindTexture(gl.TEXTURE_2D, ws.dataTex);
 
-  if (ws.uploadedBufferLength !== bufferLength) {
+  let currentU8Data = currentU8DataSpecMap.get(gl);
+  if (ws.uploadedBufferLength !== bufferLength || !currentU8Data) {
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
@@ -162,7 +174,8 @@ export function drawSpectrum({ state, dom, frame }) {
       null,
     );
     ws.uploadedBufferLength = bufferLength;
-    currentU8DataSpec = new Uint8Array(bufferLength);
+    currentU8Data = new Uint8Array(bufferLength);
+    currentU8DataSpecMap.set(gl, currentU8Data);
   }
 
   let maxFreqVal = -Infinity;
@@ -177,7 +190,7 @@ export function drawSpectrum({ state, dom, frame }) {
     let p = (val - minDb) / dbRange;
     if (p < 0) p = 0;
     else if (p > 1) p = 1;
-    currentU8DataSpec[i] = p * 255;
+    currentU8Data[i] = p * 255;
   }
 
   gl.texSubImage2D(
@@ -189,7 +202,7 @@ export function drawSpectrum({ state, dom, frame }) {
     1,
     gl.ALPHA,
     gl.UNSIGNED_BYTE,
-    currentU8DataSpec,
+    currentU8Data,
   );
 
   gl.useProgram(ws.program);
@@ -222,24 +235,29 @@ export function drawSpectrum({ state, dom, frame }) {
   // -- CPU Overlay Rendering --
   ctxOvl.save();
   ctxOvl.setTransform(1, 0, 0, 1, 0, 0);
-  ctxOvl.clearRect(
-    0,
-    0,
-    dom.canvasSpectrumOverlay.width,
-    dom.canvasSpectrumOverlay.height,
-  );
+
+  const targetCanvasOvl = isAudioPlayer
+    ? dom.canvasAudioSpectrumOverlay
+    : dom.canvasSpectrumOverlay;
+  ctxOvl.clearRect(0, 0, targetCanvasOvl.width, targetCanvasOvl.height);
   const dpr = window.devicePixelRatio || 1;
   ctxOvl.scale(dpr, dpr);
 
-  if (!state.peakHoldBuffer || state.peakHoldBuffer.length !== bufferLength) {
-    state.peakHoldBuffer = new Float32Array(bufferLength).fill(-200);
+  let peakHoldBufferName = isAudioPlayer
+    ? "audioPlayerPeakHoldBuffer"
+    : "peakHoldBuffer";
+  if (
+    !state[peakHoldBufferName] ||
+    state[peakHoldBufferName].length !== bufferLength
+  ) {
+    state[peakHoldBufferName] = new Float32Array(bufferLength).fill(-200);
   }
 
   for (let i = 0; i < bufferLength; i++) {
-    if (freqData[i] > state.peakHoldBuffer[i]) {
-      state.peakHoldBuffer[i] = freqData[i];
+    if (freqData[i] > state[peakHoldBufferName][i]) {
+      state[peakHoldBufferName][i] = freqData[i];
     } else if (!state.peakHoldInf) {
-      state.peakHoldBuffer[i] -= 0.5; // decay
+      state[peakHoldBufferName][i] -= 0.5; // decay
     }
   }
 
@@ -329,16 +347,57 @@ export function drawSpectrum({ state, dom, frame }) {
   };
 
   // Draw Peak Hold
-  drawLine(state.peakHoldBuffer, "rgba(200, 200, 200, 0.5)");
+  drawLine(state[peakHoldBufferName], "rgba(200, 200, 200, 0.5)");
 
   // Draw Snapshot
-  if (state.snapshotBuffer) {
+  if (state.snapshotBuffer && !isAudioPlayer) {
     drawLine(state.snapshotBuffer, "rgba(56, 189, 248, 0.9)", [5, 5]); // Cyan dashed
   }
 
   // Draw Noise Profile
-  if (state.noiseProfile) {
+  if (state.noiseProfile && !isAudioPlayer) {
     drawLine(state.noiseProfile, "rgba(239, 68, 68, 0.7)", [4, 4]); // Red dashed
+  }
+
+  // Draw Coherence (Dual FFT)
+  if (isAudioPlayer && coherenceData) {
+    ctxOvl.beginPath();
+    ctxOvl.strokeStyle = "rgba(234, 179, 8, 0.9)"; // Yellow Coherence Line
+    ctxOvl.lineWidth = 2.0;
+
+    for (let x = 0; x < wSpec; x += 2) {
+      let pc = x / wSpec;
+      let freqIndex;
+      if (useLogScale) {
+        let freq = Math.pow(10, pc * logMaxMinRatio + logMinFreq);
+        freqIndex = freq / hzPerBin;
+      } else {
+        let freq = minFreqLog + pc * linearRange;
+        freqIndex = freq / hzPerBin;
+      }
+
+      if (freqIndex >= 0 && freqIndex < bufferLength) {
+        let i0 = Math.floor(freqIndex);
+        let val = coherenceData[i0];
+        if (isNaN(val)) val = 0;
+        else if (val < 0) val = 0;
+        else if (val > 1) val = 1;
+
+        // Map 0 -> bottom, 1 -> top
+        let y = hSpec - val * hSpec;
+
+        if (x === 0) ctxOvl.moveTo(x, y);
+        else ctxOvl.lineTo(x, y);
+      }
+    }
+    ctxOvl.stroke();
+
+    // label for coherence
+    ctxOvl.fillStyle = "rgba(234, 179, 8, 0.8)";
+    ctxOvl.font = "10px ui-monospace, SFMono-Regular, Consolas, monospace";
+    ctxOvl.textAlign = "right";
+    ctxOvl.textBaseline = "top";
+    ctxOvl.fillText("Coherency (Mic VS Audio)", wSpec - 5, 20);
   }
 
   ctxOvl.restore();
@@ -405,7 +464,7 @@ export function drawSpectrum({ state, dom, frame }) {
               );
               if (state.eventLogs.length > 50) state.eventLogs.pop();
 
-              if (dom.clipLogContainer) {
+              if (dom.clipLogContainer && !isAudioPlayer) {
                 dom.clipLogContainer.innerHTML = state.eventLogs
                   .map((log) => {
                     const color = log.includes("Howling")
@@ -422,7 +481,7 @@ export function drawSpectrum({ state, dom, frame }) {
     }
   }
 
-  if (dom.howlingWarning) {
+  if (dom.howlingWarning && !isAudioPlayer) {
     const disp = howlingDetected ? "inline-block" : "none";
     if (dom.howlingWarning.style.display !== disp) {
       dom.howlingWarning.style.display = disp;
@@ -472,7 +531,13 @@ export function drawSpectrum({ state, dom, frame }) {
     }
   });
 
-  if (state.isHovering && state.mouseX >= 0 && state.mouseY >= 0 && minDb < 0) {
+  if (
+    state.isHovering &&
+    state.hoveredIsAudio === isAudioPlayer &&
+    state.mouseX >= 0 &&
+    state.mouseY >= 0 &&
+    minDb < 0
+  ) {
     let hoverFreq = 0;
     if (useLogScale) {
       hoverFreq =
@@ -514,8 +579,11 @@ export function drawSpectrum({ state, dom, frame }) {
       </div>
     `;
 
-    if (dom.hoverTooltip && dom.canvasSpectrum) {
-      const canvasRect = dom.canvasSpectrum.getBoundingClientRect();
+    const targetCanvasForHover = isAudioPlayer
+      ? dom.canvasAudioSpectrum
+      : dom.canvasSpectrum;
+    if (dom.hoverTooltip && targetCanvasForHover) {
+      const canvasRect = targetCanvasForHover.getBoundingClientRect();
       const tooltipX = canvasRect.left + state.mouseX;
       const tooltipY = canvasRect.top + state.mouseY;
 
@@ -528,22 +596,28 @@ export function drawSpectrum({ state, dom, frame }) {
         dom.hoverTooltip.innerHTML = statsHtml;
       }
     }
-  } else if (dom.hoverTooltip) {
+  } else if (dom.hoverTooltip && state.hoveredIsAudio === isAudioPlayer) {
     if (dom.hoverTooltip.style.display !== "none") {
       dom.hoverTooltip.style.display = "none";
     }
   }
 
-  if (dom.peakFreqValue) {
+  // Ensure this updates the correct peak frequency span
+  const peakFreqValEl = isAudioPlayer
+    ? dom.canvasAudioSpectrum.parentElement.parentElement.querySelector(
+        "#peak-freq",
+      )
+    : dom.peakFreqValue;
+  if (peakFreqValEl) {
     if (state.audioCtx && maxFreqVal > minDb + 10) {
       const dominantFreq = maxFreqIndex * hzPerBin;
       const text = dominantFreq.toFixed(0);
-      if (dom.peakFreqValue.textContent !== text) {
-        dom.peakFreqValue.textContent = text;
+      if (peakFreqValEl.textContent !== text) {
+        peakFreqValEl.textContent = text;
       }
     } else {
-      if (dom.peakFreqValue.textContent !== "--") {
-        dom.peakFreqValue.textContent = "--";
+      if (peakFreqValEl.textContent !== "--") {
+        peakFreqValEl.textContent = "--";
       }
     }
   }
