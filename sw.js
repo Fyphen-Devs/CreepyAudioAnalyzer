@@ -1,4 +1,4 @@
-const CACHE_NAME = "audio-analyzer-v4";
+const CACHE_NAME = "audio-analyzer-v0.0.13";
 const ASSETS = [
   "./",
   "./script.js",
