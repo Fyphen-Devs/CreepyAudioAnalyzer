@@ -12,6 +12,7 @@ export function initBottomPlayer() {
   const timeCurrent = document.getElementById("bmp-time-current");
   const timeTotal = document.getElementById("bmp-time-total");
   const progress = document.getElementById("bmp-progress");
+  const volumeSlider = document.getElementById("bmp-volume");
   const playlistEl = document.getElementById("bmp-playlist");
 
   let playlist = [];
@@ -192,6 +193,13 @@ export function initBottomPlayer() {
     const pct = parseFloat(e.target.value);
     audio.currentTime = (pct / 100) * audio.duration;
   });
+
+  volumeSlider.addEventListener("input", (e) => {
+    audio.volume = parseFloat(e.target.value);
+  });
+
+  // Initialize volume from slider
+  audio.volume = parseFloat(volumeSlider.value);
 
   function formatTime(seconds) {
     if (isNaN(seconds)) return "0:00";

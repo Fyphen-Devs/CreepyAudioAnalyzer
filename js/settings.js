@@ -104,6 +104,9 @@ export function bindSettings({
       state.analyserL.fftSize = size;
       state.analyserR.fftSize = size;
     }
+    if (state.audioPlayerAnalyser) {
+      state.audioPlayerAnalyser.fftSize = size;
+    }
     if (state.WasmFftClass) {
       if (state.wasmFft) state.wasmFft.free();
       state.wasmFft = new state.WasmFftClass(size);
@@ -114,6 +117,11 @@ export function bindSettings({
     dom.smoothingVal.textContent = dom.smoothingInput.value;
     if (state.analyser) {
       state.analyser.smoothingTimeConstant = parseFloat(
+        dom.smoothingInput.value,
+      );
+    }
+    if (state.audioPlayerAnalyser) {
+      state.audioPlayerAnalyser.smoothingTimeConstant = parseFloat(
         dom.smoothingInput.value,
       );
     }

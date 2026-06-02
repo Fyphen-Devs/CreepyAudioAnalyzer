@@ -1,9 +1,8 @@
-// WebGL Shader Configs
 const VS_SOURCE = `
 attribute vec2 a_position;
 varying vec2 v_uv;
 void main() {
-    v_uv = a_position * 0.5 + 0.5; // (0,0) to (1,1)
+    v_uv = a_position * 0.5 + 0.5;
     gl_Position = vec4(a_position, 0.0, 1.0);
 }`;
 
@@ -37,10 +36,10 @@ void main() {
     }
 
     float texX = (freqIndex + 0.5) / float(u_bufferLength);
-    float dataVal = texture2D(u_dataTex, vec2(texX, 0.5)).a; 
-    
+    float dataVal = texture2D(u_dataTex, vec2(texX, 0.5)).a;
+
     if (v_uv.y <= dataVal) {
-        gl_FragColor = vec4(0.886, 0.910, 0.941, 1.0); // #e2e8f0
+        gl_FragColor = vec4(0.886, 0.910, 0.941, 1.0);
     } else {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
     }
@@ -81,12 +80,10 @@ function initWebGL(gl) {
   return { program, positionBuffer };
 }
 
-let webglStateSpec = null;
-let currentU8DataSpec = null;
-const webglStateSpecMap = new Map();
-const currentU8DataSpecMap = new Map();
+const webglStateMap = new Map();
+const currentU8DataMap = new Map();
 
-function setupWebGLSpec(gl) {
+function setupWebGL(gl) {
   const result = initWebGL(gl);
   if (!result) return false;
 
@@ -99,7 +96,7 @@ function setupWebGLSpec(gl) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-  const stateObj = {
+  webglStateMap.set(gl, {
     gl,
     program,
     positionBuffer,
@@ -117,28 +114,213 @@ function setupWebGLSpec(gl) {
       u_linearRange: gl.getUniformLocation(program, "u_linearRange"),
       u_hzPerBin: gl.getUniformLocation(program, "u_hzPerBin"),
     },
-  };
-  webglStateSpecMap.set(gl, stateObj);
+  });
   return true;
 }
 
-export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
-  const gl = isAudioPlayer ? dom.ctxAudioSpectrum : dom.ctxSpectrum;
-  const ctxOvl = isAudioPlayer
-    ? dom.ctxAudioSpectrumOverlay
-    : dom.ctxSpectrumOverlay;
+// ===========================================================================
+// 1) audioPlayer 用バッファ確保
+// ===========================================================================
+export function ensureAudioPlayerBuffers(state, bufferLength) {
+  if (!state.audioPlayerAnalyser) return;
 
+  if (state.analyser) {
+    if (state.audioPlayerAnalyser.fftSize !== state.analyser.fftSize) {
+      state.audioPlayerAnalyser.fftSize = state.analyser.fftSize;
+    }
+    if (
+      state.audioPlayerAnalyser.smoothingTimeConstant !==
+      state.analyser.smoothingTimeConstant
+    ) {
+      state.audioPlayerAnalyser.smoothingTimeConstant =
+        state.analyser.smoothingTimeConstant;
+    }
+  }
+
+  if (
+    !state.audioPlayerFreqDataBuffer ||
+    state.audioPlayerFreqDataBuffer.length !== bufferLength
+  ) {
+    state.audioPlayerFreqDataBuffer = new Float32Array(bufferLength);
+  }
+  if (
+    !state.audioPlayerTimeDataBuffer ||
+    state.audioPlayerTimeDataBuffer.length !== state.audioPlayerAnalyser.fftSize
+  ) {
+    state.audioPlayerTimeDataBuffer = new Float32Array(
+      state.audioPlayerAnalyser.fftSize,
+    );
+  }
+  // coherence 計算用
+  if (!state.cohPxx || state.cohPxx.length !== bufferLength) {
+    state.cohPxx = new Float32Array(bufferLength);
+    state.cohPyy = new Float32Array(bufferLength);
+    state.cohPxyReal = new Float32Array(bufferLength);
+    state.cohPxyImag = new Float32Array(bufferLength);
+    state.coherenceData = new Float32Array(bufferLength);
+  }
+}
+
+// ===========================================================================
+// 2) WASM FFT 経路 — audioPlayer の magnitude を dB に変換しつつ
+//    マイクとの coherence を求める
+// ===========================================================================
+export function processAudioPlayerWasmFft(state, mic) {
+  if (
+    !state.audioPlayerAnalyser ||
+    !state.audioPlayerTimeDataBuffer ||
+    !state.audioPlayerFreqDataBuffer ||
+    !state.wasmFft
+  ) {
+    return;
+  }
+
+  const audioPlayerTimeData = state.audioPlayerTimeDataBuffer;
+  const audioPlayerFreqData = state.audioPlayerFreqDataBuffer;
+
+  state.audioPlayerAnalyser.getFloatTimeDomainData(audioPlayerTimeData);
+  state.wasmFft.set_input(audioPlayerTimeData);
+  state.wasmFft.process();
+
+  const apMagPtr = state.wasmFft.magnitude_ptr();
+  const apPhasePtr = state.wasmFft.phase_ptr();
+  const apWasmMagBuf = new Float32Array(
+    state.wasmMemory.buffer,
+    apMagPtr,
+    audioPlayerTimeData.length,
+  );
+  const apWasmPhaseBuf = new Float32Array(
+    state.wasmMemory.buffer,
+    apPhasePtr,
+    audioPlayerTimeData.length,
+  );
+  const apAlpha = state.audioPlayerAnalyser.smoothingTimeConstant;
+  const apN = audioPlayerTimeData.length;
+
+  for (let i = 0; i < audioPlayerFreqData.length; i++) {
+    let mag = apWasmMagBuf[i] / apN;
+    if (mag < 1e-10) mag = 1e-10;
+    let db = 20 * Math.log10(mag);
+
+    if (
+      audioPlayerFreqData[i] === undefined ||
+      !isFinite(audioPlayerFreqData[i])
+    ) {
+      audioPlayerFreqData[i] = db;
+    } else {
+      audioPlayerFreqData[i] =
+        apAlpha * audioPlayerFreqData[i] + (1 - apAlpha) * db;
+    }
+
+    // ---- coherence (Mic vs AudioPlayer) ----
+    // Coherence is scale-invariant, so we use unscaled magnitudes
+    // to avoid extreme underflow in autoPowerProd for large N.
+    const mX = state.micWasmMag[i];
+    const mY = apWasmMagBuf[i];
+    const pX = state.micWasmPhase[i];
+    const pY = apWasmPhaseBuf[i];
+
+    const pXX = mX * mX;
+    const pYY = mY * mY;
+    const phaseDiff = pX - pY;
+    const cross = mX * mY;
+    const cReal = cross * Math.cos(phaseDiff);
+    const cImag = cross * Math.sin(phaseDiff);
+
+    const timeCoherenceAlpha = 0.95;
+    state.cohPxx[i] =
+      timeCoherenceAlpha * state.cohPxx[i] + (1 - timeCoherenceAlpha) * pXX;
+    state.cohPyy[i] =
+      timeCoherenceAlpha * state.cohPyy[i] + (1 - timeCoherenceAlpha) * pYY;
+    state.cohPxyReal[i] =
+      timeCoherenceAlpha * state.cohPxyReal[i] +
+      (1 - timeCoherenceAlpha) * cReal;
+    state.cohPxyImag[i] =
+      timeCoherenceAlpha * state.cohPxyImag[i] +
+      (1 - timeCoherenceAlpha) * cImag;
+
+    const crossPowerMagSq = state.cohPxyReal[i] ** 2 + state.cohPxyImag[i] ** 2;
+    const autoPowerProd = state.cohPxx[i] * state.cohPyy[i];
+
+    state.coherenceData[i] =
+      autoPowerProd > 1e-30 ? crossPowerMagSq / autoPowerProd : 0;
+  }
+}
+
+// ===========================================================================
+// 3) AnalyserNode 直接読み (wasmFft 無し時 or 常時補完用)
+// ===========================================================================
+export function pullAudioPlayerAnalyserData(state) {
+  if (
+    !state.audioPlayerAnalyser ||
+    !state.audioPlayerFreqDataBuffer ||
+    !state.audioPlayerTimeDataBuffer
+  ) {
+    return;
+  }
+  state.audioPlayerAnalyser.getFloatFrequencyData(
+    state.audioPlayerFreqDataBuffer,
+  );
+  state.audioPlayerAnalyser.getFloatTimeDomainData(
+    state.audioPlayerTimeDataBuffer,
+  );
+}
+
+// ===========================================================================
+// 4) drawAudioSpectrum 用フレーム生成
+//    baseFrame は render.js 側で計算した共通の周波数軸情報を含むオブジェクト。
+// ===========================================================================
+export function buildAudioPlayerFrame(state, dom, baseFrame) {
+  let wAudioSpec = 0;
+  let hAudioSpec = 0;
+  if (dom.canvasAudioSpectrum) {
+    const dpr = window.devicePixelRatio || 1;
+    wAudioSpec = dom.canvasAudioSpectrum.width / dpr || 0;
+    hAudioSpec = dom.canvasAudioSpectrum.height / dpr || 0;
+  }
+
+  return {
+    wSpec: wAudioSpec,
+    hSpec: hAudioSpec,
+    wWave: baseFrame.wWave,
+    hWave: baseFrame.hWave,
+    bufferLength: baseFrame.bufferLength,
+    freqData: state.audioPlayerFreqDataBuffer,
+    timeData: state.audioPlayerTimeDataBuffer,
+    minDb: baseFrame.minDb,
+    maxDb: baseFrame.maxDb,
+    dbRange: baseFrame.dbRange,
+    useLogScale: baseFrame.useLogScale,
+    hzPerBin: baseFrame.hzPerBin,
+    minFreqLog: baseFrame.minFreqLog,
+    maxFreqLog: baseFrame.maxFreqLog,
+    logMaxMinRatio: baseFrame.logMaxMinRatio,
+    logMinFreq: baseFrame.logMinFreq,
+    linearRange: baseFrame.linearRange,
+    hzPerBinClamped: baseFrame.hzPerBinClamped,
+    linearBarWidthActual: baseFrame.linearBarWidthActual,
+    coherenceData: state.coherenceData,
+  };
+}
+
+// ===========================================================================
+// 5) 描画本体
+// ===========================================================================
+export function drawAudioSpectrum({ state, dom, frame }) {
+  const gl = dom.ctxAudioSpectrum;
+  const ctxOvl = dom.ctxAudioSpectrumOverlay;
   if (!gl || !ctxOvl) return;
 
-  if (!webglStateSpecMap.has(gl)) {
-    if (!setupWebGLSpec(gl)) return;
+  if (!webglStateMap.has(gl)) {
+    if (!setupWebGL(gl)) return;
   }
-  const ws = webglStateSpecMap.get(gl);
+  const ws = webglStateMap.get(gl);
 
-  if (!currentU8DataSpecMap.has(gl)) {
-    currentU8DataSpecMap.set(gl, null);
+  if (!currentU8DataMap.has(gl)) {
+    currentU8DataMap.set(gl, null);
   }
 
+  const apFrame = frame.audioPlayerFrame || frame;
   const {
     wSpec,
     hSpec,
@@ -154,13 +336,14 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     logMinFreq,
     linearRange,
     coherenceData,
-  } = isAudioPlayer ? frame.audioPlayerFrame : frame;
+  } = apFrame;
 
-  if (wSpec === 0 || hSpec === 0) return;
+  if (!freqData || wSpec === 0 || hSpec === 0) return;
 
+  // ---- WebGL: スペクトルバーをテクスチャ経由で描画 ----
   gl.bindTexture(gl.TEXTURE_2D, ws.dataTex);
 
-  let currentU8Data = currentU8DataSpecMap.get(gl);
+  let currentU8Data = currentU8DataMap.get(gl);
   if (ws.uploadedBufferLength !== bufferLength || !currentU8Data) {
     gl.texImage2D(
       gl.TEXTURE_2D,
@@ -175,7 +358,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     );
     ws.uploadedBufferLength = bufferLength;
     currentU8Data = new Uint8Array(bufferLength);
-    currentU8DataSpecMap.set(gl, currentU8Data);
+    currentU8DataMap.set(gl, currentU8Data);
   }
 
   let maxFreqVal = -Infinity;
@@ -224,7 +407,6 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
   gl.enableVertexAttribArray(ws.locs.a_pos);
   gl.vertexAttribPointer(ws.locs.a_pos, 2, gl.FLOAT, false, 0, 0);
 
-  // Clear transparent
   gl.clearColor(0.0, 0.0, 0.0, 0.0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -232,20 +414,16 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  // -- CPU Overlay Rendering --
+  // ---- CPU Overlay ----
   ctxOvl.save();
   ctxOvl.setTransform(1, 0, 0, 1, 0, 0);
 
-  const targetCanvasOvl = isAudioPlayer
-    ? dom.canvasAudioSpectrumOverlay
-    : dom.canvasSpectrumOverlay;
+  const targetCanvasOvl = dom.canvasAudioSpectrumOverlay;
   ctxOvl.clearRect(0, 0, targetCanvasOvl.width, targetCanvasOvl.height);
   const dpr = window.devicePixelRatio || 1;
   ctxOvl.scale(dpr, dpr);
 
-  let peakHoldBufferName = isAudioPlayer
-    ? "audioPlayerPeakHoldBuffer"
-    : "peakHoldBuffer";
+  const peakHoldBufferName = "audioPlayerPeakHoldBuffer";
   if (
     !state[peakHoldBufferName] ||
     state[peakHoldBufferName].length !== bufferLength
@@ -257,11 +435,11 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     if (freqData[i] > state[peakHoldBufferName][i]) {
       state[peakHoldBufferName][i] = freqData[i];
     } else if (!state.peakHoldInf) {
-      state[peakHoldBufferName][i] -= 0.5; // decay
+      state[peakHoldBufferName][i] -= 0.5;
     }
   }
 
-  // Draw Octave Bands if needed
+  // Octave bands
   if (state.spectrumView === "oct13" || state.spectrumView === "oct16") {
     const fraction = state.spectrumView === "oct13" ? 3 : 6;
     const bandStep = Math.pow(2, 1 / fraction);
@@ -278,7 +456,6 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
       if (binEnd > bufferLength) binEnd = bufferLength;
       if (binStart === binEnd) binEnd = binStart + 1;
 
-      // avg energy for band
       let sumPower = 0;
       for (let i = binStart; i < binEnd; i++) {
         sumPower += Math.pow(10, freqData[i] / 10);
@@ -312,7 +489,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     }
   }
 
-  // Helper macro for drawing lines
+  // helper: dB 値の配列を曲線として描く
   const drawLine = (dataArray, color, dash = []) => {
     ctxOvl.beginPath();
     ctxOvl.strokeStyle = color;
@@ -349,23 +526,13 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     ctxOvl.setLineDash([]);
   };
 
-  // Draw Peak Hold
+  // Peak hold
   drawLine(state[peakHoldBufferName], "rgba(200, 200, 200, 0.5)");
 
-  // Draw Snapshot
-  if (state.snapshotBuffer && !isAudioPlayer) {
-    drawLine(state.snapshotBuffer, "rgba(56, 189, 248, 0.9)", [5, 5]); // Cyan dashed
-  }
-
-  // Draw Noise Profile
-  if (state.noiseProfile && !isAudioPlayer) {
-    drawLine(state.noiseProfile, "rgba(239, 68, 68, 0.7)", [4, 4]); // Red dashed
-  }
-
-  // Draw Coherence (Dual FFT)
-  if (isAudioPlayer && coherenceData) {
+  // Coherence (Mic vs AudioPlayer)
+  if (coherenceData) {
     ctxOvl.beginPath();
-    ctxOvl.strokeStyle = "rgba(234, 179, 8, 0.9)"; // Yellow Coherence Line
+    ctxOvl.strokeStyle = "rgba(234, 179, 8, 0.9)";
     ctxOvl.lineWidth = 2.0;
 
     let freqLog = Math.pow(10, logMinFreq);
@@ -388,8 +555,6 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
         if (isNaN(val)) val = 0;
         else if (val < 0) val = 0;
         else if (val > 1) val = 1;
-
-        // Map 0 -> bottom, 1 -> top
         let y = hSpec - val * hSpec;
 
         if (x === 0) ctxOvl.moveTo(x, y);
@@ -398,7 +563,6 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     }
     ctxOvl.stroke();
 
-    // label for coherence
     ctxOvl.fillStyle = "rgba(234, 179, 8, 0.8)";
     ctxOvl.font = "10px ui-monospace, SFMono-Regular, Consolas, monospace";
     ctxOvl.textAlign = "right";
@@ -419,10 +583,9 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
 
   ctxOvl.restore();
 
-  const howlingEnabled = dom.howlingWarning !== null;
-  let peaks = [];
-  let howlingDetected = false;
+  // ---- Peak detection (audioPlayer は howling 警告は出さない) ----
   const { peakCount } = state.config;
+  const peaks = [];
 
   let sumPower = 0;
   let sampleCount = 0;
@@ -433,7 +596,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
   const avgDb = 10 * Math.log10(sumPower / sampleCount);
   const mOffset = Math.max(2, Math.round(150 / hzPerBin));
 
-  if (howlingEnabled || peakCount > 0) {
+  if (peakCount > 0) {
     for (let i = 2; i < bufferLength - 2; i++) {
       const val = freqData[i];
       if (val <= minDb + 5) continue;
@@ -447,61 +610,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
         val > freqData[i + 2]
       ) {
         peaks.push({ index: i, val, freq: f });
-
-        if (howlingEnabled) {
-          const papr = val - avgDb;
-          let pnpr = 0;
-          if (i - mOffset >= 0 && i + mOffset < bufferLength) {
-            pnpr = Math.min(
-              val - freqData[i - mOffset],
-              val - freqData[i + mOffset],
-            );
-          }
-          let phpr = 0;
-          const h2Index = i * 2;
-          if (h2Index < bufferLength) phpr = val - freqData[h2Index];
-
-          if (
-            f > 200 &&
-            val > -35 &&
-            papr > 25 &&
-            pnpr > 15 &&
-            (phpr > 15 || h2Index >= bufferLength)
-          ) {
-            howlingDetected = true;
-
-            const now = new Date();
-            if (!state.lastHowlingTime || now - state.lastHowlingTime > 1000) {
-              state.lastHowlingTime = now;
-              const timeStr = now.toLocaleTimeString();
-              const fStr =
-                f > 1000 ? (f / 1000).toFixed(2) + "k" : Math.round(f);
-              state.eventLogs.unshift(
-                `[${timeStr}] Howling: ${fStr}Hz (${val.toFixed(1)}dB)`,
-              );
-              if (state.eventLogs.length > 50) state.eventLogs.pop();
-
-              if (dom.clipLogContainer && !isAudioPlayer) {
-                dom.clipLogContainer.innerHTML = state.eventLogs
-                  .map((log) => {
-                    const color = log.includes("Howling")
-                      ? "#fbbf24"
-                      : "#ef4444";
-                    return `<div style="color: ${color}; border-bottom: 1px solid var(--border); padding: 2px 0;">${log}</div>`;
-                  })
-                  .join("");
-              }
-            }
-          }
-        }
       }
-    }
-  }
-
-  if (dom.howlingWarning && !isAudioPlayer) {
-    const disp = howlingDetected ? "inline-block" : "none";
-    if (dom.howlingWarning.style.display !== disp) {
-      dom.howlingWarning.style.display = disp;
     }
   }
 
@@ -510,8 +619,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
   ctxOvl.textAlign = "center";
 
   peaks.sort((a, b) => b.val - a.val);
-  const maxPeaksToShow = peakCount;
-  const topPeaks = peaks.slice(0, maxPeaksToShow);
+  const topPeaks = peaks.slice(0, peakCount);
 
   topPeaks.forEach((peak) => {
     let percent = (peak.val - minDb) / dbRange;
@@ -520,7 +628,6 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
 
     let freq = peak.freq;
     let peakX;
-
     if (useLogScale) {
       if (freq < minFreqLog) freq = minFreqLog;
       peakX =
@@ -539,7 +646,6 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
         freq >= 1000 ? (freq / 1000).toFixed(1) + "k" : Math.round(freq);
       const textY = peakY - 10;
       let align = "center";
-
       if (peakX < 40) align = "left";
       if (peakX > wSpec - 20) align = "right";
 
@@ -548,9 +654,10 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     }
   });
 
+  // ---- Hover tooltip (audioPlayer canvas のみ) ----
   if (
     state.isHovering &&
-    state.hoveredIsAudio === isAudioPlayer &&
+    state.hoveredIsAudio === true &&
     state.mouseX >= 0 &&
     state.mouseY >= 0 &&
     minDb < 0
@@ -596,11 +703,8 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
       </div>
     `;
 
-    const targetCanvasForHover = isAudioPlayer
-      ? dom.canvasAudioSpectrum
-      : dom.canvasSpectrum;
-    if (dom.hoverTooltip && targetCanvasForHover) {
-      const canvasRect = targetCanvasForHover.getBoundingClientRect();
+    if (dom.hoverTooltip && dom.canvasAudioSpectrum) {
+      const canvasRect = dom.canvasAudioSpectrum.getBoundingClientRect();
       const tooltipX = canvasRect.left + state.mouseX;
       const tooltipY = canvasRect.top + state.mouseY;
 
@@ -613,18 +717,17 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
         dom.hoverTooltip.innerHTML = statsHtml;
       }
     }
-  } else if (dom.hoverTooltip && state.hoveredIsAudio === isAudioPlayer) {
+  } else if (dom.hoverTooltip && state.hoveredIsAudio === true) {
     if (dom.hoverTooltip.style.display !== "none") {
       dom.hoverTooltip.style.display = "none";
     }
   }
 
-  // Ensure this updates the correct peak frequency span
-  const peakFreqValEl = isAudioPlayer
-    ? dom.canvasAudioSpectrum.parentElement.parentElement.querySelector(
-        "#peak-freq",
-      )
-    : dom.peakFreqValue;
+  // ---- Peak frequency indicator (#peak-freq inside audio card) ----
+  const peakFreqValEl =
+    dom.canvasAudioSpectrum.parentElement.parentElement.querySelector(
+      "#peak-freq",
+    );
   if (peakFreqValEl) {
     if (state.audioCtx && maxFreqVal > minDb + 10) {
       const dominantFreq = maxFreqIndex * hzPerBin;
@@ -639,7 +742,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     }
   }
 
-  // Draw horizontal frequency axis
+  // ---- Frequency axis labels & grid ----
   ctxOvl.textAlign = "center";
   ctxOvl.textBaseline = "bottom";
   ctxOvl.fillStyle = "rgba(226, 232, 240, 0.4)";
@@ -647,7 +750,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
   const labels = [minFreqLog];
   const steps = [50, 100, 200, 500, 1000, 2000, 5000, 10000, 15000, 20000];
   if (useLogScale) {
-    for (let s of steps) {
+    for (const s of steps) {
       if (s > minFreqLog && s < maxFreqLog) labels.push(s);
     }
   } else {
@@ -663,66 +766,18 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
   }
   labels.push(maxFreqLog);
 
-  for (let f of labels) {
-    let ratio = useLogScale
+  for (const f of labels) {
+    const ratio = useLogScale
       ? (Math.log10(f) - logMinFreq) / logMaxMinRatio
       : (f - minFreqLog) / linearRange;
 
     const fStr = f >= 1000 ? `${(f / 1000).toFixed(1)}k` : `${f}`;
     ctxOvl.fillText(fStr, ratio * wSpec, hSpec - 2);
 
-    // Draw subtle vertical grid line
     ctxOvl.beginPath();
     ctxOvl.moveTo(ratio * wSpec, 0);
     ctxOvl.lineTo(ratio * wSpec, hSpec - 15);
     ctxOvl.strokeStyle = "rgba(255, 255, 255, 0.05)";
     ctxOvl.stroke();
-  }
-
-  // Draw solo filter overlay (Bandpass)
-  if (
-    state.isDraggingFilter &&
-    state.filterStartX !== null &&
-    state.filterEndX !== null
-  ) {
-    const xMin = Math.min(state.filterStartX, state.filterEndX);
-    const xMax = Math.max(state.filterStartX, state.filterEndX);
-
-    ctxOvl.fillStyle = "rgba(59, 130, 246, 0.3)";
-    ctxOvl.fillRect(xMin, 0, Math.max(1, xMax - xMin), hSpec);
-
-    let fMin = 0,
-      fMax = 0;
-    if (useLogScale) {
-      fMin = minFreqLog * Math.pow(maxFreqLog / minFreqLog, xMin / wSpec);
-      fMax = minFreqLog * Math.pow(maxFreqLog / minFreqLog, xMax / wSpec);
-    } else {
-      fMin = minFreqLog + (maxFreqLog - minFreqLog) * (xMin / wSpec);
-      fMax = minFreqLog + (maxFreqLog - minFreqLog) * (xMax / wSpec);
-    }
-
-    if (fMax < fMin + 1) fMax = fMin + 1;
-
-    const centerFreq = Math.sqrt(fMin * fMax);
-    const bandwidth = fMax - fMin;
-    const qValue = centerFreq / bandwidth;
-
-    if (state.bandpassFilter) {
-      state.bandpassFilter.frequency.value = centerFreq;
-      state.bandpassFilter.Q.value = Math.max(0.0001, qValue);
-    }
-
-    ctxOvl.fillStyle = "#fff";
-    ctxOvl.textAlign = "center";
-    ctxOvl.textBaseline = "top";
-    const textStart =
-      fMin >= 1000 ? (fMin / 1000).toFixed(1) + "k" : Math.round(fMin);
-    const textEnd =
-      fMax >= 1000 ? (fMax / 1000).toFixed(1) + "k" : Math.round(fMax);
-    ctxOvl.fillText(
-      `${textStart} - ${textEnd} Hz`,
-      xMin + (xMax - xMin) / 2,
-      10,
-    );
   }
 }

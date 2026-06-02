@@ -3,6 +3,13 @@ import { drawWaveformAndMeter } from "./render/waveformMeter.js";
 import { drawSpectrogram } from "./render/spectrogram.js";
 import { drawVectorscope } from "./render/vectorscope.js";
 import { demodulateFrame } from "./modem.js";
+import {
+  ensureAudioPlayerBuffers,
+  processAudioPlayerWasmFft,
+  pullAudioPlayerAnalyserData,
+  buildAudioPlayerFrame,
+  drawAudioSpectrum,
+} from "./render/audioSpectrum.js";
 
 function buildFrameData({ state, dom }) {
   const {
@@ -35,33 +42,7 @@ function buildFrameData({ state, dom }) {
   const timeData = state.timeDataBuffer;
 
   // buffers for audio player
-  if (state.audioPlayerAnalyser) {
-    if (
-      !state.audioPlayerFreqDataBuffer ||
-      state.audioPlayerFreqDataBuffer.length !== bufferLength
-    ) {
-      state.audioPlayerFreqDataBuffer = new Float32Array(bufferLength);
-    }
-    if (
-      !state.audioPlayerTimeDataBuffer ||
-      state.audioPlayerTimeDataBuffer.length !==
-        state.audioPlayerAnalyser.fftSize
-    ) {
-      state.audioPlayerTimeDataBuffer = new Float32Array(
-        state.audioPlayerAnalyser.fftSize,
-      );
-    }
-    // coherence buffers
-    if (!state.cohPxx || state.cohPxx.length !== bufferLength) {
-      state.cohPxx = new Float32Array(bufferLength);
-      state.cohPyy = new Float32Array(bufferLength);
-      state.cohPxyReal = new Float32Array(bufferLength);
-      state.cohPxyImag = new Float32Array(bufferLength);
-      state.coherenceData = new Float32Array(bufferLength);
-      state.micWasmMag = new Float32Array(bufferLength * 2);
-      state.micWasmPhase = new Float32Array(bufferLength * 2);
-    }
-  }
+  ensureAudioPlayerBuffers(state, bufferLength);
 
   const audioPlayerFreqData = state.audioPlayerFreqDataBuffer;
   const audioPlayerTimeData = state.audioPlayerTimeDataBuffer;
@@ -88,6 +69,11 @@ function buildFrameData({ state, dom }) {
         timeData.length,
       );
 
+      if (!state.micWasmMag || state.micWasmMag.length !== wasmMagBuf.length) {
+        state.micWasmMag = new Float32Array(wasmMagBuf.length);
+        state.micWasmPhase = new Float32Array(wasmPhaseBuf.length);
+      }
+
       // copy mic data for coherence calculation later
       if (state.micWasmMag) {
         state.micWasmMag.set(wasmMagBuf);
@@ -112,83 +98,7 @@ function buildFrameData({ state, dom }) {
         }
       }
 
-      if (
-        state.audioPlayerAnalyser &&
-        audioPlayerTimeData &&
-        audioPlayerFreqData
-      ) {
-        state.audioPlayerAnalyser.getFloatTimeDomainData(audioPlayerTimeData);
-        state.wasmFft.set_input(audioPlayerTimeData);
-        state.wasmFft.process();
-        const apMagPtr = state.wasmFft.magnitude_ptr();
-        const apPhasePtr = state.wasmFft.phase_ptr();
-        const apWasmMagBuf = new Float32Array(
-          state.wasmMemory.buffer,
-          apMagPtr,
-          audioPlayerTimeData.length,
-        );
-        const apWasmPhaseBuf = new Float32Array(
-          state.wasmMemory.buffer,
-          apPhasePtr,
-          audioPlayerTimeData.length,
-        );
-        const apAlpha = state.audioPlayerAnalyser.smoothingTimeConstant;
-        const apN = audioPlayerTimeData.length;
-
-        for (let i = 0; i < audioPlayerFreqData.length; i++) {
-          let mag = apWasmMagBuf[i] / apN;
-          if (mag < 1e-10) mag = 1e-10;
-          let db = 20 * Math.log10(mag);
-          if (
-            audioPlayerFreqData[i] === undefined ||
-            !isFinite(audioPlayerFreqData[i])
-          ) {
-            audioPlayerFreqData[i] = db;
-          } else {
-            audioPlayerFreqData[i] =
-              apAlpha * audioPlayerFreqData[i] + (1 - apAlpha) * db;
-          }
-
-          // Compute coherence per bin
-          const mX = state.micWasmMag[i] / N;
-          const mY = apWasmMagBuf[i] / apN;
-          const pX = state.micWasmPhase[i];
-          const pY = apWasmPhaseBuf[i];
-
-          // Auto spectra (power)
-          const pXX = mX * mX;
-          const pYY = mY * mY;
-          // Cross spectra (complex)
-          const phaseDiff = pX - pY;
-          const cross = mX * mY;
-          const cReal = cross * Math.cos(phaseDiff);
-          const cImag = cross * Math.sin(phaseDiff);
-
-          const timeCoherenceAlpha = 0.95; // Smoothing for exponential average
-          state.cohPxx[i] =
-            timeCoherenceAlpha * state.cohPxx[i] +
-            (1 - timeCoherenceAlpha) * pXX;
-          state.cohPyy[i] =
-            timeCoherenceAlpha * state.cohPyy[i] +
-            (1 - timeCoherenceAlpha) * pYY;
-          state.cohPxyReal[i] =
-            timeCoherenceAlpha * state.cohPxyReal[i] +
-            (1 - timeCoherenceAlpha) * cReal;
-          state.cohPxyImag[i] =
-            timeCoherenceAlpha * state.cohPxyImag[i] +
-            (1 - timeCoherenceAlpha) * cImag;
-
-          const crossPowerMagSq =
-            state.cohPxyReal[i] ** 2 + state.cohPxyImag[i] ** 2;
-          const autoPowerProd = state.cohPxx[i] * state.cohPyy[i];
-
-          if (autoPowerProd > 1e-20) {
-            state.coherenceData[i] = crossPowerMagSq / autoPowerProd;
-          } else {
-            state.coherenceData[i] = 0;
-          }
-        }
-      }
+      processAudioPlayerWasmFft(state, { N, alpha });
 
       // ※位相同期などの高度な処理（Vectorscope等）は wasmPhaseBuf を利用
     } else {
