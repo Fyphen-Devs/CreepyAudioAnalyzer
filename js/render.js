@@ -58,16 +58,39 @@ function buildFrameData({ state, dom }) {
       const magnitudePtr = state.wasmFft.magnitude_ptr();
       const phasePtr = state.wasmFft.phase_ptr();
 
-      const wasmMagBuf = new Float32Array(
-        state.wasmMemory.buffer,
-        magnitudePtr,
-        timeData.length,
-      );
-      const wasmPhaseBuf = new Float32Array(
-        state.wasmMemory.buffer,
-        phasePtr,
-        timeData.length,
-      );
+      // Check if WASM memory buffer has changed (reallocated)
+      const wasmBuffer = state.wasmMemory.buffer;
+      if (
+        !state.wasmMagBuf ||
+        state.wasmMagBuf.buffer !== wasmBuffer ||
+        state.wasmMagBuf.length !== timeData.length
+      ) {
+        state.wasmMagBuf = new Float32Array(
+          wasmBuffer,
+          magnitudePtr,
+          timeData.length,
+        );
+        state.wasmPhaseBuf = new Float32Array(
+          wasmBuffer,
+          phasePtr,
+          timeData.length,
+        );
+      } else {
+        // Re-create views with correct offsets if pointers changed
+        state.wasmMagBuf = new Float32Array(
+          wasmBuffer,
+          magnitudePtr,
+          timeData.length,
+        );
+        state.wasmPhaseBuf = new Float32Array(
+          wasmBuffer,
+          phasePtr,
+          timeData.length,
+        );
+      }
+
+      const wasmMagBuf = state.wasmMagBuf;
+      const wasmPhaseBuf = state.wasmPhaseBuf;
 
       if (!state.micWasmMag || state.micWasmMag.length !== wasmMagBuf.length) {
         state.micWasmMag = new Float32Array(wasmMagBuf.length);

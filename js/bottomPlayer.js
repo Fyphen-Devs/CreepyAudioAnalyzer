@@ -17,6 +17,7 @@ export function initBottomPlayer() {
 
   let playlist = [];
   let currentIndex = -1;
+  let currentTrackUrl = null; // Track current URL for cleanup
 
   // Toggle Collapse
   header.addEventListener("click", () => {
@@ -86,6 +87,15 @@ export function initBottomPlayer() {
   }
 
   function removeTrack(index) {
+    // Revoke URL if removing currently playing track
+    if (index === currentIndex && currentTrackUrl) {
+      URL.revokeObjectURL(currentTrackUrl);
+      currentTrackUrl = null;
+    } else if (index < currentIndex) {
+      // Adjust index if removed track was before current
+      currentIndex--;
+    }
+
     playlist.splice(index, 1);
 
     if (playlist.length === 0) {
@@ -105,17 +115,24 @@ export function initBottomPlayer() {
       if (index === currentIndex) {
         currentIndex = index >= playlist.length ? 0 : index;
         loadTrack(currentIndex);
-      } else if (index < currentIndex) {
-        currentIndex--;
       }
+      // currentIndex already adjusted above for index < currentIndex
     }
     renderPlaylist();
   }
 
   function loadTrack(index) {
     if (index < 0 || index >= playlist.length) return;
+
+    // Revoke previous URL to prevent memory leak
+    if (currentTrackUrl) {
+      URL.revokeObjectURL(currentTrackUrl);
+      currentTrackUrl = null;
+    }
+
     const file = playlist[index];
     const url = URL.createObjectURL(file);
+    currentTrackUrl = url;
 
     audio.src = url;
     trackName.textContent = file.name;

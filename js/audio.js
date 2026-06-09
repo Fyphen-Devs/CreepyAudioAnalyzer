@@ -207,7 +207,13 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
         stopAudio();
       }
 
+      // Revoke previous file URL if exists
+      if (state.audioFileUrl) {
+        URL.revokeObjectURL(state.audioFileUrl);
+      }
+
       const fileUrl = URL.createObjectURL(file);
+      state.audioFileUrl = fileUrl;
       let audioPlayer = document.getElementById("audio-player");
       if (audioPlayer) {
         // Recreate the audio element to bypass 'already connected' error on subsequent files
