@@ -24,6 +24,17 @@ export function initBottomPlayer() {
     container.classList.toggle("collapsed");
   });
 
+  // Prevent drag-and-drop events from bubbling up to app.js when interacting with bottom player
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  container.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
   // Load Music
   uploadInput.addEventListener("change", (e) => {
     const files = Array.from(e.target.files);
@@ -58,6 +69,7 @@ export function initBottomPlayer() {
     playlist.forEach((file, index) => {
       const li = document.createElement("li");
       li.className = "bmp-playlist-item";
+      li.draggable = true;
       if (index === currentIndex) {
         li.classList.add("active");
       }
@@ -78,6 +90,53 @@ export function initBottomPlayer() {
       removeBtn.addEventListener("click", (ev) => {
         ev.stopPropagation(); // prevent li click
         removeTrack(index);
+      });
+
+      // Drag and Drop Reordering
+      li.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", index);
+        e.dataTransfer.effectAllowed = "move";
+        li.classList.add("dragging");
+      });
+
+      li.addEventListener("dragend", () => {
+        li.classList.remove("dragging");
+      });
+
+      li.addEventListener("dragover", (e) => {
+        e.preventDefault(); // Necessary to allow drop
+        e.dataTransfer.dropEffect = "move";
+        li.classList.add("drag-over");
+      });
+
+      li.addEventListener("dragleave", () => {
+        li.classList.remove("drag-over");
+      });
+
+      li.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent app.js body drop handler from triggering
+        li.classList.remove("drag-over");
+
+        const fromIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+        const toIndex = index;
+
+        if (fromIndex === toIndex) return;
+
+        // Reorder playlist
+        const item = playlist.splice(fromIndex, 1)[0];
+        playlist.splice(toIndex, 0, item);
+
+        // Adjust currentIndex
+        if (currentIndex === fromIndex) {
+          currentIndex = toIndex;
+        } else if (fromIndex < currentIndex && toIndex >= currentIndex) {
+          currentIndex--;
+        } else if (fromIndex > currentIndex && toIndex <= currentIndex) {
+          currentIndex++;
+        }
+
+        renderPlaylist();
       });
 
       li.appendChild(nameSpan);

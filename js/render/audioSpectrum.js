@@ -36,7 +36,7 @@ void main() {
     }
 
     float texX = (freqIndex + 0.5) / float(u_bufferLength);
-    float dataVal = texture2D(u_dataTex, vec2(texX, 0.5)).a;
+    float dataVal = texture2D(u_dataTex, vec2(texX, 0.5)).r;
 
     if (v_uv.y <= dataVal) {
         gl_FragColor = vec4(0.886, 0.910, 0.941, 1.0);
@@ -89,6 +89,10 @@ function setupWebGL(gl) {
 
   const { program, positionBuffer } = result;
 
+  const isWebGL2 = gl instanceof WebGL2RenderingContext;
+  const internalFormat = isWebGL2 ? gl.R8 : gl.LUMINANCE;
+  const format = isWebGL2 ? gl.RED : gl.LUMINANCE;
+
   const dataTex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, dataTex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
@@ -102,6 +106,8 @@ function setupWebGL(gl) {
     positionBuffer,
     dataTex,
     uploadedBufferLength: 0,
+    internalFormat,
+    format,
     locs: {
       a_pos: gl.getAttribLocation(program, "a_position"),
       u_dataTex: gl.getUniformLocation(program, "u_dataTex"),
@@ -158,6 +164,8 @@ export function ensureAudioPlayerBuffers(state, bufferLength) {
     state.cohPxyReal = new Float32Array(bufferLength);
     state.cohPxyImag = new Float32Array(bufferLength);
     state.coherenceData = new Float32Array(bufferLength);
+    state.delayData = new Float32Array(bufferLength);
+    state.delay = 0;
   }
 }
 
@@ -245,6 +253,29 @@ export function processAudioPlayerWasmFft(state, mic) {
     state.coherenceData[i] =
       autoPowerProd > 1e-30 ? crossPowerMagSq / autoPowerProd : 0;
   }
+
+  // ---- Delay Calculation (Phase Slope Method) ----
+  if (state.audioCtx && state.audioPlayerAnalyser) {
+    const sampleRate = state.audioCtx.sampleRate;
+    const fftSize = state.audioPlayerAnalyser.fftSize;
+    const deltaF = sampleRate / fftSize;
+    let weightedSumTau = 0;
+    let sumCoh = 0;
+
+    for (let i = 0; i < audioPlayerFreqData.length - 1; i++) {
+      const phi1 = Math.atan2(state.cohPxyImag[i], state.cohPxyReal[i]);
+      const phi2 = Math.atan2(state.cohPxyImag[i + 1], state.cohPxyReal[i + 1]);
+      const diff = phi2 - phi1;
+      const wrappedDiff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      const tau = wrappedDiff / (2 * Math.PI * deltaF);
+      state.delayData[i] = tau;
+
+      const coh = state.coherenceData[i];
+      weightedSumTau += tau * coh;
+      sumCoh += coh;
+    }
+    state.delay = sumCoh > 0 ? weightedSumTau / sumCoh : 0;
+  }
 }
 
 // ===========================================================================
@@ -274,9 +305,8 @@ export function buildAudioPlayerFrame(state, dom, baseFrame) {
   let wAudioSpec = 0;
   let hAudioSpec = 0;
   if (dom.canvasAudioSpectrum) {
-    const dpr = window.devicePixelRatio || 1;
-    wAudioSpec = dom.canvasAudioSpectrum.width / dpr || 0;
-    hAudioSpec = dom.canvasAudioSpectrum.height / dpr || 0;
+    wAudioSpec = dom.canvasAudioSpectrum.clientWidth || 0;
+    hAudioSpec = dom.canvasAudioSpectrum.clientHeight || 0;
   }
 
   return {
@@ -316,6 +346,16 @@ export function drawAudioSpectrum({ state, dom, frame }) {
   }
   const ws = webglStateMap.get(gl);
 
+  const dpr = window.devicePixelRatio || 1;
+  if (
+    gl.canvas.width !== gl.canvas.clientWidth * dpr ||
+    gl.canvas.height !== gl.canvas.clientHeight * dpr
+  ) {
+    gl.canvas.width = gl.canvas.clientWidth * dpr;
+    gl.canvas.height = gl.canvas.clientHeight * dpr;
+  }
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
   if (!currentU8DataMap.has(gl)) {
     currentU8DataMap.set(gl, null);
   }
@@ -348,11 +388,11 @@ export function drawAudioSpectrum({ state, dom, frame }) {
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
-      gl.ALPHA,
+      ws.internalFormat,
       bufferLength,
       1,
       0,
-      gl.ALPHA,
+      ws.format,
       gl.UNSIGNED_BYTE,
       null,
     );
@@ -383,7 +423,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
     0,
     bufferLength,
     1,
-    gl.ALPHA,
+    ws.format,
     gl.UNSIGNED_BYTE,
     currentU8Data,
   );
@@ -419,9 +459,30 @@ export function drawAudioSpectrum({ state, dom, frame }) {
   ctxOvl.setTransform(1, 0, 0, 1, 0, 0);
 
   const targetCanvasOvl = dom.canvasAudioSpectrumOverlay;
+  // Sync internal resolution to CSS size * DPR to avoid scaling artifacts and coordinate mismatches
+  if (
+    targetCanvasOvl.width !== targetCanvasOvl.clientWidth * dpr ||
+    targetCanvasOvl.height !== targetCanvasOvl.clientHeight * dpr
+  ) {
+    targetCanvasOvl.width = targetCanvasOvl.clientWidth * dpr;
+    targetCanvasOvl.height = targetCanvasOvl.clientHeight * dpr;
+  }
+
   ctxOvl.clearRect(0, 0, targetCanvasOvl.width, targetCanvasOvl.height);
-  const dpr = window.devicePixelRatio || 1;
   ctxOvl.scale(dpr, dpr);
+
+  // Update Delay in DOM (roughly every 1 second to avoid flickering)
+  const now = performance.now();
+  if (
+    state.delay !== undefined &&
+    dom.audioDelayVal &&
+    (!state.lastDelayUpdateTime || now - state.lastDelayUpdateTime > 1000)
+  ) {
+    dom.audioDelayVal.textContent = (Math.max(0, state.delay) * 1000).toFixed(
+      2,
+    );
+    state.lastDelayUpdateTime = now;
+  }
 
   const peakHoldBufferName = "audioPlayerPeakHoldBuffer";
   if (

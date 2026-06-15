@@ -165,9 +165,8 @@ function buildFrameData({ state, dom }) {
   let wAudioSpec = 0;
   let hAudioSpec = 0;
   if (dom.canvasAudioSpectrum) {
-    const dpr = window.devicePixelRatio || 1;
-    wAudioSpec = dom.canvasAudioSpectrum.width / dpr || 0;
-    hAudioSpec = dom.canvasAudioSpectrum.height / dpr || 0;
+    wAudioSpec = dom.canvasAudioSpectrum.clientWidth || 0;
+    hAudioSpec = dom.canvasAudioSpectrum.clientHeight || 0;
   }
 
   return {
@@ -338,7 +337,7 @@ export function createRenderer({ state, dom }) {
     if (audioFsaChecked) {
       document.getElementById("card-audio-fsa").style.display = "flex";
       if (state.audioPlayerAnalyser) {
-        drawSpectrum({ state, dom, frame }, true);
+        drawAudioSpectrum({ state, dom, frame });
       }
     } else {
       document.getElementById("card-audio-fsa").style.display = "none";

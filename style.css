@@ -621,6 +621,16 @@ canvas {
   border-left: 3px solid var(--accent);
 }
 
+.bmp-playlist-item.dragging {
+  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.bmp-playlist-item.drag-over {
+  background: rgba(58, 139, 101, 0.3);
+  border-top: 2px solid var(--accent);
+}
+
 .bmp-playlist-item-name {
   white-space: nowrap;
   overflow: hidden;

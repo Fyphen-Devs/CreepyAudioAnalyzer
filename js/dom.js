@@ -84,6 +84,7 @@ export function getDomRefs() {
     clipLogEmpty: document.getElementById("clip-log-empty"),
     btnClearClips: document.getElementById("btn-clear-clips"),
     peakFreqValue: document.getElementById("peak-freq"),
+    audioDelayVal: document.getElementById("audio-delay-val"),
     correlationValue: document.getElementById("correlation-value"),
     correlationFill: document.getElementById("correlation-fill"),
 
