@@ -14,6 +14,7 @@ export function initBottomPlayer() {
   const progress = document.getElementById("bmp-progress");
   const volumeSlider = document.getElementById("bmp-volume");
   const playlistEl = document.getElementById("bmp-playlist");
+  const eqControls = document.getElementById("bmp-eq-controls");
 
   let playlist = [];
   let currentIndex = -1;
@@ -57,6 +58,8 @@ export function initBottomPlayer() {
     // allow selecting the same file(s) again
     e.target.value = "";
   });
+
+  setupEqualizer();
 
   function renderPlaylist() {
     playlistEl.innerHTML = "";
@@ -178,6 +181,88 @@ export function initBottomPlayer() {
       // currentIndex already adjusted above for index < currentIndex
     }
     renderPlaylist();
+  }
+
+  function setupEqualizer() {
+    if (!eqControls) return;
+
+    const bands = [
+      { label: "60", freq: 60 },
+      { label: "170", freq: 170 },
+      { label: "310", freq: 310 },
+      { label: "600", freq: 600 },
+      { label: "1k", freq: 1000 },
+      { label: "3k", freq: 3000 },
+      { label: "6k", freq: 6000 },
+      { label: "12k", freq: 12000 },
+    ];
+
+    eqControls.innerHTML = "";
+    bands.forEach((band, index) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "bmp-eq-slider-wrapper";
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.className = "bmp-eq-slider";
+      slider.min = "-12";
+      slider.max = "12";
+      slider.step = "1";
+      slider.value = "0";
+
+      slider.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        if (window.audioController && window.audioController.updateEqGain) {
+          window.audioController.updateEqGain(index, val);
+        }
+      });
+
+      const label = document.createElement("span");
+      label.className = "bmp-eq-label";
+      label.textContent = band.label;
+
+      wrapper.appendChild(slider);
+      wrapper.appendChild(label);
+      eqControls.appendChild(wrapper);
+    });
+
+    // Reset functionality
+    const resetBtn = document.getElementById("bmp-eq-reset");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        const sliders = eqControls.querySelectorAll(".bmp-eq-slider");
+        sliders.forEach((slider, index) => {
+          slider.value = "0";
+          if (window.audioController && window.audioController.updateEqGain) {
+            window.audioController.updateEqGain(index, 0);
+          }
+        });
+      });
+    }
+
+    // Auto EQ functionality
+    const autoBtn = document.getElementById("bmp-eq-auto");
+    if (autoBtn) {
+      autoBtn.addEventListener("click", async () => {
+        autoBtn.textContent = "Analyzing...";
+        autoBtn.disabled = true;
+
+        const suggestedGains = await window.audioController.autoOptimizeEq();
+
+        if (suggestedGains) {
+          const sliders = eqControls.querySelectorAll(".bmp-eq-slider");
+          suggestedGains.forEach((gain, index) => {
+            if (sliders[index]) {
+              sliders[index].value = gain;
+              window.audioController.updateEqGain(index, gain);
+            }
+          });
+        }
+
+        autoBtn.textContent = "Auto EQ";
+        autoBtn.disabled = false;
+      });
+    }
   }
 
   function loadTrack(index) {

@@ -118,6 +118,31 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       state.audioPlayerAnalyser.minDecibels = state.analyser.minDecibels;
       state.audioPlayerAnalyser.maxDecibels = state.analyser.maxDecibels;
 
+      // Equalizer Setup
+      const eqBands = [
+        { freq: 60, type: "lowshelf" },
+        { freq: 170, type: "peaking" },
+        { freq: 310, type: "peaking" },
+        { freq: 600, type: "peaking" },
+        { freq: 1000, type: "peaking" },
+        { freq: 3000, type: "peaking" },
+        { freq: 6000, type: "peaking" },
+        { freq: 12000, type: "highshelf" },
+      ];
+
+      state.eqFilters = eqBands.map((band) => {
+        const filter = state.audioCtx.createBiquadFilter();
+        filter.type = band.type;
+        filter.frequency.value = band.freq;
+        filter.gain.value = 0;
+        return filter;
+      });
+
+      // Connect EQ filters in series
+      for (let i = 0; i < state.eqFilters.length - 1; i++) {
+        state.eqFilters[i].connect(state.eqFilters[i + 1]);
+      }
+
       // Connect audioPlayer (bmp-audio) to audioPlayerAnalyser
       if (!state.audioPlayerSource && dom.bmpAudio) {
         state.audioPlayerSource = state.audioCtx.createMediaElementSource(
@@ -126,7 +151,11 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       }
       if (state.audioPlayerSource) {
         state.audioPlayerSource.disconnect();
-        state.audioPlayerSource.connect(state.audioPlayerAnalyser);
+        // Source -> EQ[0] -> ... -> EQ[n] -> Analyser -> Destination
+        state.audioPlayerSource.connect(state.eqFilters[0]);
+        state.eqFilters[state.eqFilters.length - 1].connect(
+          state.audioPlayerAnalyser,
+        );
         state.audioPlayerAnalyser.connect(state.audioCtx.destination);
       }
 
@@ -190,6 +219,57 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       dom.sampleRateText.textContent = state.audioCtx.sampleRate;
 
       if (state.updateToneGenerator) state.updateToneGenerator(state, dom);
+
+      // Expose EQ control globally for bottomPlayer.js
+      window.audioController = {
+        updateEqGain: (index, gainDb) => {
+          if (state.eqFilters && state.eqFilters[index]) {
+            state.eqFilters[index].gain.setTargetAtTime(
+              gainDb,
+              state.audioCtx.currentTime,
+              0.01,
+            );
+          }
+        },
+        autoOptimizeEq: async () => {
+          if (!state.audioPlayerAnalyser || !state.eqFilters) return null;
+
+          const fftSize = state.audioPlayerAnalyser.fftSize;
+          const sampleRate = state.audioCtx.sampleRate;
+          const dataArray = new Float32Array(fftSize / 2);
+          const bandFreqs = [60, 170, 310, 600, 1000, 3000, 6000, 12000];
+          const samples = [];
+          const sampleCount = 10;
+
+          // Collect samples over a short period
+          for (let i = 0; i < sampleCount; i++) {
+            state.audioPlayerAnalyser.getFloatFrequencyData(dataArray);
+            samples.push(new Float32Array(dataArray));
+            await new Promise((r) => setTimeout(r, 50));
+          }
+
+          // Calculate average energy per band
+          const bandAverages = bandFreqs.map((freq) => {
+            const bin = Math.round((freq * fftSize) / sampleRate);
+            const binIdx = Math.max(0, Math.min(bin, dataArray.length - 1));
+            let sum = 0;
+            samples.forEach((s) => (sum += s[binIdx]));
+            return sum / sampleCount;
+          });
+
+          const overallAvg =
+            bandAverages.reduce((a, b) => a + b, 0) / bandAverages.length;
+
+          // Calculate required gain to flatten the spectrum (roughly)
+          // Target: bandAvg + gain = overallAvg => gain = overallAvg - bandAvg
+          const suggestedGains = bandAverages.map((avg) => {
+            const gain = overallAvg - avg;
+            return Math.max(-12, Math.min(12, gain));
+          });
+
+          return suggestedGains;
+        },
+      };
 
       resizeCanvases();
       draw();

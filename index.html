@@ -1401,6 +1401,24 @@
         </div>
 
         <div class="bmp-playlist-section">
+          <div
+            class="bmp-playlist-header"
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <span>Equalizer</span>
+            <div style="display: flex; gap: 6px">
+              <button id="bmp-eq-auto" class="bmp-btn-auto">Auto EQ</button>
+              <button id="bmp-eq-reset" class="bmp-btn-reset">Reset</button>
+            </div>
+          </div>
+          <div id="bmp-eq-controls" class="bmp-eq-controls"></div>
+        </div>
+
+        <div class="bmp-playlist-section">
           <div class="bmp-playlist-header">Queue</div>
           <ul id="bmp-playlist"></ul>
         </div>
