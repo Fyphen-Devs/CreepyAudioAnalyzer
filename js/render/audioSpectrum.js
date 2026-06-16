@@ -790,7 +790,13 @@ export function drawAudioSpectrum({ state, dom, frame }) {
       "#peak-freq",
     );
   if (peakFreqValEl) {
-    if (state.audioCtx && maxFreqVal > minDb + 10) {
+    if (topPeaks.length > 0) {
+      const topPeak = topPeaks[0];
+      const text = topPeak.freq.toFixed(0);
+      if (peakFreqValEl.textContent !== text) {
+        peakFreqValEl.textContent = text;
+      }
+    } else if (state.audioCtx && maxFreqVal > minDb + 10) {
       const dominantFreq = maxFreqIndex * hzPerBin;
       const text = dominantFreq.toFixed(0);
       if (peakFreqValEl.textContent !== text) {
