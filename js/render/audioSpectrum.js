@@ -158,11 +158,7 @@ export function ensureAudioPlayerBuffers(state, bufferLength) {
     );
   }
   // coherence 計算用
-  if (!state.cohPxx || state.cohPxx.length !== bufferLength) {
-    state.cohPxx = new Float32Array(bufferLength);
-    state.cohPyy = new Float32Array(bufferLength);
-    state.cohPxyReal = new Float32Array(bufferLength);
-    state.cohPxyImag = new Float32Array(bufferLength);
+  if (!state.coherenceData || state.coherenceData.length !== bufferLength) {
     state.coherenceData = new Float32Array(bufferLength);
     state.delayData = new Float32Array(bufferLength);
     state.delay = 0;
@@ -219,62 +215,28 @@ export function processAudioPlayerWasmFft(state, mic) {
       audioPlayerFreqData[i] =
         apAlpha * audioPlayerFreqData[i] + (1 - apAlpha) * db;
     }
-
-    // ---- coherence (Mic vs AudioPlayer) ----
-    // Coherence is scale-invariant, so we use unscaled magnitudes
-    // to avoid extreme underflow in autoPowerProd for large N.
-    const mX = state.micWasmMag[i];
-    const mY = apWasmMagBuf[i];
-    const pX = state.micWasmPhase[i];
-    const pY = apWasmPhaseBuf[i];
-
-    const pXX = mX * mX;
-    const pYY = mY * mY;
-    const phaseDiff = pX - pY;
-    const cross = mX * mY;
-    const cReal = cross * Math.cos(phaseDiff);
-    const cImag = cross * Math.sin(phaseDiff);
-
-    const timeCoherenceAlpha = 0.95;
-    state.cohPxx[i] =
-      timeCoherenceAlpha * state.cohPxx[i] + (1 - timeCoherenceAlpha) * pXX;
-    state.cohPyy[i] =
-      timeCoherenceAlpha * state.cohPyy[i] + (1 - timeCoherenceAlpha) * pYY;
-    state.cohPxyReal[i] =
-      timeCoherenceAlpha * state.cohPxyReal[i] +
-      (1 - timeCoherenceAlpha) * cReal;
-    state.cohPxyImag[i] =
-      timeCoherenceAlpha * state.cohPxyImag[i] +
-      (1 - timeCoherenceAlpha) * cImag;
-
-    const crossPowerMagSq = state.cohPxyReal[i] ** 2 + state.cohPxyImag[i] ** 2;
-    const autoPowerProd = state.cohPxx[i] * state.cohPyy[i];
-
-    state.coherenceData[i] =
-      autoPowerProd > 1e-30 ? crossPowerMagSq / autoPowerProd : 0;
   }
 
-  // ---- Delay Calculation (Phase Slope Method) ----
+  // ---- coherence & delay (WASM) ----
+  state.wasmFft.calculate_coherence(
+    state.micWasmMag,
+    state.micWasmPhase,
+    apMagPtr,
+    apPhasePtr,
+  );
+
+  const cohPtr = state.wasmFft.coherence_ptr();
+  const delayDataPtr = state.wasmFft.delay_data_ptr();
+  const bufferLength = audioPlayerFreqData.length;
+  state.coherenceData.set(
+    new Float32Array(state.wasmMemory.buffer, cohPtr, bufferLength),
+  );
+  state.delayData.set(
+    new Float32Array(state.wasmMemory.buffer, delayDataPtr, bufferLength),
+  );
+
   if (state.audioCtx && state.audioPlayerAnalyser) {
-    const sampleRate = state.audioCtx.sampleRate;
-    const fftSize = state.audioPlayerAnalyser.fftSize;
-    const deltaF = sampleRate / fftSize;
-    let weightedSumTau = 0;
-    let sumCoh = 0;
-
-    for (let i = 0; i < audioPlayerFreqData.length - 1; i++) {
-      const phi1 = Math.atan2(state.cohPxyImag[i], state.cohPxyReal[i]);
-      const phi2 = Math.atan2(state.cohPxyImag[i + 1], state.cohPxyReal[i + 1]);
-      const diff = phi2 - phi1;
-      const wrappedDiff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      const tau = wrappedDiff / (2 * Math.PI * deltaF);
-      state.delayData[i] = tau;
-
-      const coh = state.coherenceData[i];
-      weightedSumTau += tau * coh;
-      sumCoh += coh;
-    }
-    state.delay = sumCoh > 0 ? weightedSumTau / sumCoh : 0;
+    state.delay = state.wasmFft.calculate_delay(state.audioCtx.sampleRate);
   }
 }
 
@@ -689,6 +651,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
 
     let freq = peak.freq;
     let peakX;
+
     if (useLogScale) {
       if (freq < minFreqLog) freq = minFreqLog;
       peakX =
@@ -711,7 +674,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
       if (peakX > wSpec - 20) align = "right";
 
       ctxOvl.textAlign = align;
-      ctxOvl.fillText(freqText, peakX, textY);
+      ctxOvl.fillText(freqText, peakX, textY - 10);
     }
   });
 

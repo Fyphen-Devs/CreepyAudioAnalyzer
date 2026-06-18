@@ -4,6 +4,11 @@
 export class WasmFft {
     free(): void;
     [Symbol.dispose](): void;
+    calculate_coherence(mic_mag: Float32Array, mic_phase: Float32Array, ap_mag_ptr: number, ap_phase_ptr: number): void;
+    calculate_delay(sample_rate: number): number;
+    calculate_lufs(freq_data_db: Float32Array, hz_per_bin: number): number;
+    coherence_ptr(): number;
+    delay_data_ptr(): number;
     /**
      * マグニチュード（振幅）バッファのポインタを取得
      */
@@ -28,6 +33,11 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_wasmfft_free: (a: number, b: number) => void;
+    readonly wasmfft_calculate_coherence: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
+    readonly wasmfft_calculate_delay: (a: number, b: number) => number;
+    readonly wasmfft_calculate_lufs: (a: number, b: number, c: number, d: number) => number;
+    readonly wasmfft_coherence_ptr: (a: number) => number;
+    readonly wasmfft_delay_data_ptr: (a: number) => number;
     readonly wasmfft_magnitude_ptr: (a: number) => number;
     readonly wasmfft_new: (a: number) => number;
     readonly wasmfft_phase_ptr: (a: number) => number;

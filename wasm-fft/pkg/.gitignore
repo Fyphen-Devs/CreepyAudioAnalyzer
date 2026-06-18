@@ -1,7 +1,1 @@
 *
-!.gitignore
-!package.json
-!wasm_fft.d.ts
-!wasm_fft.js
-!wasm_fft_bg.wasm
-!wasm_fft_bg.wasm.d.ts
