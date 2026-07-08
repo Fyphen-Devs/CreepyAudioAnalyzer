@@ -7,6 +7,6 @@
   },
   "unifyChatProvider.commitMessageGeneration.model": {
     "vendor": "unify-chat-provider",
-    "id": "Google%20AI%20Studio/models/gemma-4-31b-it"
+    "id": "Google AI Studio/models/gemma-4-31b-it"
   }
 }

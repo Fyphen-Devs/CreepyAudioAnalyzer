@@ -188,34 +188,24 @@ export function processAudioPlayerWasmFft(state, mic) {
 
   const apMagPtr = state.wasmFft.magnitude_ptr();
   const apPhasePtr = state.wasmFft.phase_ptr();
-  const apWasmMagBuf = new Float32Array(
-    state.wasmMemory.buffer,
-    apMagPtr,
-    audioPlayerTimeData.length,
-  );
-  const apWasmPhaseBuf = new Float32Array(
-    state.wasmMemory.buffer,
-    apPhasePtr,
-    audioPlayerTimeData.length,
-  );
+  const wasmBuffer = state.wasmMemory.buffer;
+  const len = audioPlayerTimeData.length;
+
+  if (
+    !state.apWasmMagBuf ||
+    state.apWasmMagBuf.buffer !== wasmBuffer ||
+    state.apWasmMagBuf.length !== len
+  ) {
+    state.apWasmMagBuf = new Float32Array(wasmBuffer, apMagPtr, len);
+    state.apWasmPhaseBuf = new Float32Array(wasmBuffer, apPhasePtr, len);
+  }
+  const apWasmMagBuf = state.apWasmMagBuf;
+  const apWasmPhaseBuf = state.apWasmPhaseBuf;
+
   const apAlpha = state.audioPlayerAnalyser.smoothingTimeConstant;
   const apN = audioPlayerTimeData.length;
 
-  for (let i = 0; i < audioPlayerFreqData.length; i++) {
-    let mag = apWasmMagBuf[i] / apN;
-    if (mag < 1e-10) mag = 1e-10;
-    let db = 20 * Math.log10(mag);
-
-    if (
-      audioPlayerFreqData[i] === undefined ||
-      !isFinite(audioPlayerFreqData[i])
-    ) {
-      audioPlayerFreqData[i] = db;
-    } else {
-      audioPlayerFreqData[i] =
-        apAlpha * audioPlayerFreqData[i] + (1 - apAlpha) * db;
-    }
-  }
+  state.wasmFft.process_db(apAlpha, apN, audioPlayerFreqData);
 
   // ---- coherence & delay (WASM) ----
   state.wasmFft.calculate_coherence(
@@ -228,12 +218,28 @@ export function processAudioPlayerWasmFft(state, mic) {
   const cohPtr = state.wasmFft.coherence_ptr();
   const delayDataPtr = state.wasmFft.delay_data_ptr();
   const bufferLength = audioPlayerFreqData.length;
-  state.coherenceData.set(
-    new Float32Array(state.wasmMemory.buffer, cohPtr, bufferLength),
-  );
-  state.delayData.set(
-    new Float32Array(state.wasmMemory.buffer, delayDataPtr, bufferLength),
-  );
+
+  if (
+    !state.apWasmCohBuf ||
+    state.apWasmCohBuf.buffer !== wasmBuffer ||
+    state.apWasmCohBuf.length !== bufferLength
+  ) {
+    state.apWasmCohBuf = new Float32Array(wasmBuffer, cohPtr, bufferLength);
+    state.apWasmDelayBuf = new Float32Array(
+      wasmBuffer,
+      delayDataPtr,
+      bufferLength,
+    );
+  }
+  const rawCoh = state.apWasmCohBuf;
+  const rawDelay = state.apWasmDelayBuf;
+
+  // Smooth coherence data to reduce "jumping" and visual stress
+  // Smoothing factor: lower = smoother/slower, higher = sharper/faster
+  const cohSmoothing = 0.2;
+  state.wasmFft.smooth_coherence(cohSmoothing, state.coherenceData);
+
+  state.delayData.set(rawDelay);
 
   if (state.audioCtx && state.audioPlayerAnalyser) {
     state.delay = state.wasmFft.calculate_delay(state.audioCtx.sampleRate);
@@ -363,6 +369,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
     currentU8DataMap.set(gl, currentU8Data);
   }
 
+  const invDbRange = 1 / dbRange;
   let maxFreqVal = -Infinity;
   let maxFreqIndex = 0;
 
@@ -372,7 +379,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
       maxFreqVal = val;
       maxFreqIndex = i;
     }
-    let p = (val - minDb) / dbRange;
+    let p = (val - minDb) * invDbRange;
     if (p < 0) p = 0;
     else if (p > 1) p = 1;
     currentU8Data[i] = p * 255;
@@ -440,9 +447,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
     dom.audioDelayVal &&
     (!state.lastDelayUpdateTime || now - state.lastDelayUpdateTime > 1000)
   ) {
-    dom.audioDelayVal.textContent = (Math.max(0, state.delay) * 1000).toFixed(
-      2,
-    );
+    dom.audioDelayVal.textContent = (state.delay * 1000).toFixed(2);
     state.lastDelayUpdateTime = now;
   }
 
@@ -481,7 +486,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
 
       let sumPower = 0;
       for (let i = binStart; i < binEnd; i++) {
-        sumPower += Math.pow(10, freqData[i] / 10);
+        sumPower += 10 ** (freqData[i] / 10);
       }
       let avgDb = 10 * Math.log10(sumPower / (binEnd - binStart));
       if (isNaN(avgDb)) avgDb = minDb;
@@ -519,18 +524,20 @@ export function drawAudioSpectrum({ state, dom, frame }) {
     ctxOvl.lineWidth = 1.5;
     ctxOvl.setLineDash(dash);
 
+    const invHzPerBin = 1 / hzPerBin;
+    const invWSpec = 1 / wSpec;
     let freqLog = Math.pow(10, logMinFreq);
     const freqLogMult = Math.pow(10, (2 / wSpec) * logMaxMinRatio);
 
     for (let x = 0; x < wSpec; x += 2) {
       let freqIndex;
       if (useLogScale) {
-        freqIndex = freqLog / hzPerBin;
+        freqIndex = freqLog * invHzPerBin;
         freqLog *= freqLogMult;
       } else {
-        let pc = x / wSpec;
+        let pc = x * invWSpec;
         let freq = minFreqLog + pc * linearRange;
-        freqIndex = freq / hzPerBin;
+        freqIndex = freq * invHzPerBin;
       }
 
       if (freqIndex >= 0 && freqIndex < bufferLength) {
@@ -613,7 +620,7 @@ export function drawAudioSpectrum({ state, dom, frame }) {
   let sumPower = 0;
   let sampleCount = 0;
   for (let i = 0; i < bufferLength; i += 4) {
-    sumPower += Math.pow(10, freqData[i] / 10);
+    sumPower += 10 ** (freqData[i] / 10);
     sampleCount++;
   }
   const avgDb = 10 * Math.log10(sumPower / sampleCount);
@@ -753,22 +760,29 @@ export function drawAudioSpectrum({ state, dom, frame }) {
       "#peak-freq",
     );
   if (peakFreqValEl) {
-    if (topPeaks.length > 0) {
-      const topPeak = topPeaks[0];
-      const text = topPeak.freq.toFixed(0);
-      if (peakFreqValEl.textContent !== text) {
-        peakFreqValEl.textContent = text;
+    const now = performance.now();
+    if (
+      !state.lastAudioPeakFreqUpdate ||
+      now - state.lastAudioPeakFreqUpdate > 100
+    ) {
+      if (topPeaks.length > 0) {
+        const topPeak = topPeaks[0];
+        const text = topPeak.freq.toFixed(0);
+        if (peakFreqValEl.textContent !== text) {
+          peakFreqValEl.textContent = text;
+        }
+      } else if (state.audioCtx && maxFreqVal > minDb + 10) {
+        const dominantFreq = maxFreqIndex * hzPerBin;
+        const text = dominantFreq.toFixed(0);
+        if (peakFreqValEl.textContent !== text) {
+          peakFreqValEl.textContent = text;
+        }
+      } else {
+        if (peakFreqValEl.textContent !== "--") {
+          peakFreqValEl.textContent = "--";
+        }
       }
-    } else if (state.audioCtx && maxFreqVal > minDb + 10) {
-      const dominantFreq = maxFreqIndex * hzPerBin;
-      const text = dominantFreq.toFixed(0);
-      if (peakFreqValEl.textContent !== text) {
-        peakFreqValEl.textContent = text;
-      }
-    } else {
-      if (peakFreqValEl.textContent !== "--") {
-        peakFreqValEl.textContent = "--";
-      }
+      state.lastAudioPeakFreqUpdate = now;
     }
   }
 

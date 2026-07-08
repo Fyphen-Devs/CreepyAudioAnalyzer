@@ -69,7 +69,7 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
       };
 
       if (dom.micSelect && dom.micSelect.value !== "default") {
-        constraints.audio.deviceId = { exact: dom.micSelect.value };
+        constraints.audio.deviceId = dom.micSelect.value;
       }
 
       state.stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -284,7 +284,7 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
   async function startAudioFromFile(file) {
     try {
       if (state.isRunning) {
-        stopAudio();
+        await stopAudio();
       }
 
       // Revoke previous file URL if exists
@@ -397,12 +397,17 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
     }
   }
 
-  function stopAudio() {
+  async function stopAudio() {
     const audioPlayer = document.getElementById("audio-player");
     if (audioPlayer) {
       audioPlayer.pause();
       audioPlayer.src = "";
       audioPlayer.style.display = "none";
+    }
+
+    if (state.stream) {
+      state.stream.getTracks().forEach((track) => track.stop());
+      state.stream = null;
     }
 
     if (state.audioCtx) {
@@ -413,11 +418,8 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
         state.toneOsc.disconnect();
         state.toneOsc = null;
       }
-      state.audioCtx.close();
+      await state.audioCtx.close();
       state.audioCtx = null;
-    }
-    if (state.stream) {
-      state.stream.getTracks().forEach((track) => track.stop());
     }
 
     dom.channelsText.textContent = "--";

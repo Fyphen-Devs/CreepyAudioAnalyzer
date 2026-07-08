@@ -89,6 +89,16 @@ export class WasmFft {
         wasm.wasmfft_process(this.__wbg_ptr);
     }
     /**
+     * @param {number} alpha
+     * @param {number} n
+     * @param {Float32Array} output
+     */
+    process_db(alpha, n, output) {
+        var ptr0 = passArrayF32ToWasm0(output, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        wasm.wasmfft_process_db(this.__wbg_ptr, alpha, n, ptr0, len0, output);
+    }
+    /**
      * JS側から入力データ（Float32Array）を渡してセットする
      * @param {Float32Array} input_data
      */
@@ -97,11 +107,23 @@ export class WasmFft {
         const len0 = WASM_VECTOR_LEN;
         wasm.wasmfft_set_input(this.__wbg_ptr, ptr0, len0);
     }
+    /**
+     * @param {number} alpha
+     * @param {Float32Array} output
+     */
+    smooth_coherence(alpha, output) {
+        var ptr0 = passArrayF32ToWasm0(output, wasm.__wbindgen_malloc);
+        var len0 = WASM_VECTOR_LEN;
+        wasm.wasmfft_smooth_coherence(this.__wbg_ptr, alpha, ptr0, len0, output);
+    }
 }
 if (Symbol.dispose) WasmFft.prototype[Symbol.dispose] = WasmFft.prototype.free;
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_copy_to_typed_array_787746aeb47818bc: function(arg0, arg1, arg2) {
+            new Uint8Array(arg2.buffer, arg2.byteOffset, arg2.byteLength).set(getArrayU8FromWasm0(arg0, arg1));
+        },
         __wbg___wbindgen_throw_9c31b086c2b26051: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -124,6 +146,11 @@ function __wbg_get_imports() {
 const WasmFftFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmfft_free(ptr, 1));
+
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
 
 let cachedFloat32ArrayMemory0 = null;
 function getFloat32ArrayMemory0() {

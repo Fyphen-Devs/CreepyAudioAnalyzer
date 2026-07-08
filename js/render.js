@@ -1,5 +1,5 @@
 import { drawSpectrum } from "./render/spectrum.js";
-import { drawWaveformAndMeter } from "./render/waveformMeter.js";
+import { drawWaveform, updateMeter } from "./render/waveformMeter.js";
 import { drawSpectrogram } from "./render/spectrogram.js";
 import { drawVectorscope } from "./render/vectorscope.js";
 import { demodulateFrame } from "./modem.js";
@@ -11,7 +11,7 @@ import {
   drawAudioSpectrum,
 } from "./render/audioSpectrum.js";
 
-function buildFrameData({ state, dom }) {
+function buildFrameData({ state, dom, processAudioPlayer = false }) {
   const {
     wSpec,
     hSpec,
@@ -75,18 +75,6 @@ function buildFrameData({ state, dom }) {
           phasePtr,
           timeData.length,
         );
-      } else {
-        // Re-create views with correct offsets if pointers changed
-        state.wasmMagBuf = new Float32Array(
-          wasmBuffer,
-          magnitudePtr,
-          timeData.length,
-        );
-        state.wasmPhaseBuf = new Float32Array(
-          wasmBuffer,
-          phasePtr,
-          timeData.length,
-        );
       }
 
       const wasmMagBuf = state.wasmMagBuf;
@@ -106,22 +94,11 @@ function buildFrameData({ state, dom }) {
       const alpha = state.analyser.smoothingTimeConstant;
       const N = timeData.length;
 
-      for (let i = 0; i < freqData.length; i++) {
-        // Nで割って正規化 (窓関数のゲイン補正も含むとベターだが、ここでは簡易的にNのみ)
-        let mag = wasmMagBuf[i] / N;
-        if (mag < 1e-10) mag = 1e-10;
+      state.wasmFft.process_db(alpha, N, freqData);
 
-        let db = 20 * Math.log10(mag);
-
-        // スムージング処理 (前回の値とブレンド)
-        if (freqData[i] === undefined || !isFinite(freqData[i])) {
-          freqData[i] = db;
-        } else {
-          freqData[i] = alpha * freqData[i] + (1 - alpha) * db;
-        }
+      if (processAudioPlayer) {
+        processAudioPlayerWasmFft(state, { N, alpha });
       }
-
-      processAudioPlayerWasmFft(state, { N, alpha });
 
       // ※位相同期などの高度な処理（Vectorscope等）は wasmPhaseBuf を利用
     } else {
@@ -129,6 +106,7 @@ function buildFrameData({ state, dom }) {
       state.analyser.getFloatTimeDomainData(timeData);
     }
     if (
+      processAudioPlayer &&
       state.audioPlayerAnalyser &&
       audioPlayerFreqData &&
       audioPlayerTimeData
@@ -283,6 +261,29 @@ function processCalibration(state, dom, freqData) {
 }
 
 export function createRenderer({ state, dom }) {
+  // Cache DOM elements for visibility to avoid getElementById in every frame
+  const toggles = {
+    fsa: document.getElementById("toggle-fsa"),
+    audioFsa: document.getElementById("toggle-audio-fsa"),
+    spectrogram: document.getElementById("toggle-spectrogram"),
+    oscilloscope: document.getElementById("toggle-oscilloscope"),
+    vectorscope: document.getElementById("toggle-vectorscope"),
+  };
+  const cards = {
+    fsa: document.getElementById("card-fsa"),
+    audioFsa: document.getElementById("card-audio-fsa"),
+    spectrogram: document.getElementById("card-spectrogram"),
+    oscilloscope: document.getElementById("card-oscilloscope"),
+    vectorscope: document.getElementById("card-vectorscope"),
+  };
+  const lastVis = {
+    fsa: null,
+    audioFsa: null,
+    spectrogram: null,
+    oscilloscope: null,
+    vectorscope: null,
+  };
+
   function draw(timestamp = 0, force = false) {
     if (!force && !state.isRunning) return;
     if (!force) {
@@ -310,58 +311,70 @@ export function createRenderer({ state, dom }) {
 
     let t0 = performance.now();
 
-    const frame = buildFrameData({ state, dom });
+    const audioFsaChecked = toggles.audioFsa?.checked;
+    const frame = buildFrameData({
+      state,
+      dom,
+      processAudioPlayer: audioFsaChecked,
+    });
 
     if (!state.isFrozen && state.isCalibrating) {
       processCalibration(state, dom, frame.freqData);
     }
 
-    const fsaChecked = document.getElementById("toggle-fsa")?.checked;
-    const audioFsaChecked =
-      document.getElementById("toggle-audio-fsa")?.checked;
-    const spectrogramChecked =
-      document.getElementById("toggle-spectrogram")?.checked;
-    const oscilloscopeChecked = document.getElementById(
-      "toggle-oscilloscope",
-    )?.checked;
-    const vectorscopeChecked =
-      document.getElementById("toggle-vectorscope")?.checked;
+    const fsaChecked = toggles.fsa?.checked;
+    const spectrogramChecked = toggles.spectrogram?.checked;
+    const oscilloscopeChecked = toggles.oscilloscope?.checked;
+    const vectorscopeChecked = toggles.vectorscope?.checked;
 
+    if (fsaChecked !== lastVis.fsa) {
+      if (cards.fsa) cards.fsa.style.display = fsaChecked ? "flex" : "none";
+      lastVis.fsa = fsaChecked;
+    }
     if (fsaChecked) {
-      document.getElementById("card-fsa").style.display = "flex";
       drawSpectrum({ state, dom, frame });
-    } else {
-      document.getElementById("card-fsa").style.display = "none";
     }
 
+    if (audioFsaChecked !== lastVis.audioFsa) {
+      if (cards.audioFsa)
+        cards.audioFsa.style.display = audioFsaChecked ? "flex" : "none";
+      lastVis.audioFsa = audioFsaChecked;
+    }
     if (audioFsaChecked) {
-      document.getElementById("card-audio-fsa").style.display = "flex";
       if (state.audioPlayerAnalyser) {
         drawAudioSpectrum({ state, dom, frame });
       }
-    } else {
-      document.getElementById("card-audio-fsa").style.display = "none";
     }
 
+    if (spectrogramChecked !== lastVis.spectrogram) {
+      if (cards.spectrogram)
+        cards.spectrogram.style.display = spectrogramChecked ? "flex" : "none";
+      lastVis.spectrogram = spectrogramChecked;
+    }
     if (spectrogramChecked) {
-      document.getElementById("card-spectrogram").style.display = "flex";
       drawSpectrogram({ dom, frame, state });
-    } else {
-      document.getElementById("card-spectrogram").style.display = "none";
     }
 
+    if (oscilloscopeChecked !== lastVis.oscilloscope) {
+      if (cards.oscilloscope)
+        cards.oscilloscope.style.display = oscilloscopeChecked
+          ? "flex"
+          : "none";
+      lastVis.oscilloscope = oscilloscopeChecked;
+    }
+
+    updateMeter({ state, dom, frame });
     if (oscilloscopeChecked) {
-      document.getElementById("card-oscilloscope").style.display = "flex";
-      drawWaveformAndMeter({ state, dom, frame });
-    } else {
-      document.getElementById("card-oscilloscope").style.display = "none";
+      drawWaveform({ state, dom, frame });
     }
 
+    if (vectorscopeChecked !== lastVis.vectorscope) {
+      if (cards.vectorscope)
+        cards.vectorscope.style.display = vectorscopeChecked ? "flex" : "none";
+      lastVis.vectorscope = vectorscopeChecked;
+    }
     if (vectorscopeChecked) {
-      document.getElementById("card-vectorscope").style.display = "flex";
       drawVectorscope({ state, dom });
-    } else {
-      document.getElementById("card-vectorscope").style.display = "none";
     }
 
     if (state.modemActive && state.modemAnalyser) {

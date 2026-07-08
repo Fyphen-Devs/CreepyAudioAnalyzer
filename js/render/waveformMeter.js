@@ -47,10 +47,7 @@ function initWebGL(context) {
   valueBuffer = gl.createBuffer();
 }
 
-export function drawWaveformAndMeter({ state, dom, frame }) {
-  const { wWave, hWave, timeData } = frame;
-  const fftSize = state.analyser.fftSize;
-
+function calculateMeterStats(timeData, fftSize) {
   let maxAbs = 0;
   let sumSquares = 0;
   for (let i = 0; i < fftSize; i++) {
@@ -59,6 +56,12 @@ export function drawWaveformAndMeter({ state, dom, frame }) {
     if (absV > maxAbs) maxAbs = absV;
     sumSquares += v * v;
   }
+  return { maxAbs, sumSquares };
+}
+
+export function drawWaveform({ state, dom, frame }) {
+  const { timeData } = frame;
+  const fftSize = state.analyser.fftSize;
 
   if (dom.ctxWaveform) {
     initWebGL(dom.ctxWaveform);
@@ -98,6 +101,12 @@ export function drawWaveformAndMeter({ state, dom, frame }) {
     gl.disableVertexAttribArray(aPositionLoc);
     gl.disableVertexAttribArray(aValueLoc);
   }
+}
+
+export function updateMeter({ state, dom, frame }) {
+  const { timeData } = frame;
+  const fftSize = state.analyser.fftSize;
+  const { maxAbs, sumSquares } = calculateMeterStats(timeData, fftSize);
 
   let currentPeakDb = -Infinity;
   const standard = state.config.meteringStandard || "peak";

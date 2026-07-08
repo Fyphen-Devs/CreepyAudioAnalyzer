@@ -55,7 +55,7 @@ export function bindSettings({
   if (dom.micSelect) {
     dom.micSelect.addEventListener("change", async () => {
       if (state.isRunning) {
-        stopAudio();
+        await stopAudio();
         await startAudio();
       }
     });

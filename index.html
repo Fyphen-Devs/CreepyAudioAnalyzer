@@ -109,16 +109,10 @@
       <main class="main-content">
         <div id="hover-tooltip" style="position: fixed">--</div>
         <aside class="sidebar">
+          <!-- Audio I/O -->
           <div class="panel">
-            <h2>Analyzer Settings</h2>
-
-            <div
-              class="setting-group"
-              style="
-                padding-bottom: 12px;
-                border-bottom: 1px solid var(--border);
-              "
-            >
+            <h2>Audio I/O</h2>
+            <div class="setting-group">
               <label for="mic-select">Microphone</label>
               <select id="mic-select">
                 <option value="default">Default Device</option>
@@ -149,24 +143,7 @@
                 value="0"
               />
             </div>
-            <div class="panel info-panel">
-              <h2>Microphone & Render Info</h2>
 
-              <p>
-                Status:
-                <span id="audio-status" class="status-offline">Offline</span>
-              </p>
-              <p>Sample Rate: <span id="sample-rate">--</span> Hz</p>
-              <p>Channels: <span id="audio-channels">--</span></p>
-              <p>Device: <span id="audio-device-name">--</span></p>
-            </div>
-            <div class="setting-group" style="margin-bottom: 8px">
-              <select id="metering-standard" style="width: 100%">
-                <option value="peak" selected>Peak (True Peak)</option>
-                <option value="rms">RMS</option>
-                <option value="lufs">LUFS (Approximation)</option>
-              </select>
-            </div>
             <div class="setting-group">
               <label for="out-select">Output Speaker</label>
               <select id="out-select">
@@ -174,464 +151,488 @@
               </select>
             </div>
 
-            <div class="panel peak-meter-panel">
-              <div class="setting-group" style="margin-top: 24px">
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 8px;
-                  "
-                >
-                  <label style="margin: 0">Event Log (Clip/Howling)</label>
-                  <button
-                    id="btn-clear-clips"
-                    class="btn"
-                    style="padding: 2px 6px; font-size: 0.75rem"
-                  >
-                    Clear
-                  </button>
-                </div>
-                <div id="clip-log-container">
-                  <div
-                    style="
-                      color: var(--text-muted);
-                      text-align: center;
-                      padding: 8px 0;
-                    "
-                    id="clip-log-empty"
-                  >
-                    No clips recorded
-                  </div>
-                </div>
-              </div>
-
-              <div class="setting-group">
-                <label for="spec-theme">Spectrogram Theme</label>
-                <select id="spec-theme">
-                  <option value="classic">Classic</option>
-                  <option value="fire">Fire</option>
-                  <option value="ocean">Ocean</option>
-                  <option value="matrix">Matrix</option>
-                  <option value="grayscale">Grayscale</option>
-                </select>
-              </div>
-
-              <div class="setting-group">
-                <label for="spec-mode">Spectrogram Mode</label>
-                <select id="spec-mode">
-                  <option value="standard">Standard</option>
-                  <option value="waterfall">Waterfall</option>
-                </select>
-              </div>
-
-              <div class="setting-group">
-                <label for="update-rate">Update Rate (FPS)</label>
-                <select id="update-rate">
-                  <option value="60" selected>60 FPS</option>
-                  <option value="30">30 FPS</option>
-                  <option value="15">15 FPS</option>
-                  <option value="10">10 FPS</option>
-                </select>
-              </div>
-
-              <div class="setting-group">
-                <label for="freq-scale">FSA Scale</label>
-                <select id="freq-scale">
-                  <option value="linear">Linear</option>
-                  <option value="logarithmic" selected>Logarithmic</option>
-                </select>
-              </div>
-
-              <div class="setting-group">
-                <label>Frequency Range (Hz)</label>
-                <div style="display: flex; gap: 0.5rem">
-                  <input
-                    type="number"
-                    id="freq-min"
-                    value="20"
-                    min="1"
-                    max="20000"
-                    style="
-                      flex: 1;
-                      padding: 0.4rem;
-                      background: var(--bg-dark);
-                      color: var(--text-main);
-                      border: 1px solid var(--border);
-                      border-radius: 4px;
-                    "
-                  />
-                  <span style="align-self: center">-</span>
-                  <input
-                    type="number"
-                    id="freq-max"
-                    value="20000"
-                    min="100"
-                    max="24000"
-                    style="
-                      flex: 1;
-                      padding: 0.4rem;
-                      background: var(--bg-dark);
-                      color: var(--text-main);
-                      border: 1px solid var(--border);
-                      border-radius: 4px;
-                    "
-                  />
-                </div>
-              </div>
-
-              <div
-                class="setting-group"
+            <div
+              class="panel info-panel"
+              style="
+                margin-top: 12px;
+                border: 1px solid var(--border);
+                padding: 8px;
+                border-radius: 4px;
+              "
+            >
+              <h3
                 style="
-                  padding-bottom: 16px;
-                  border-bottom: 1px solid var(--border);
+                  font-size: 0.9rem;
+                  margin-bottom: 8px;
+                  color: var(--accent);
                 "
               >
-                <label
-                  for="peak-count"
-                  style="display: flex; justify-content: space-between"
-                >
-                  <span>Show Peaks</span>
-                  <span
-                    id="peak-count-val"
-                    style="
-                      font-family: ui-monospace, monospace;
-                      color: var(--text-main);
-                    "
-                    >10</span
-                  >
-                </label>
-                <input
-                  type="range"
-                  id="peak-count"
-                  min="0"
-                  max="20"
-                  step="1"
-                  value="10"
-                />
-              </div>
+                System Info
+              </h3>
+              <p style="font-size: 0.8rem; margin: 4px 0">
+                Status:
+                <span id="audio-status" class="status-offline">Offline</span>
+              </p>
+              <p style="font-size: 0.8rem; margin: 4px 0">
+                Sample Rate: <span id="sample-rate">--</span> Hz
+              </p>
+              <p style="font-size: 0.8rem; margin: 4px 0">
+                Channels: <span id="audio-channels">--</span>
+              </p>
+              <p style="font-size: 0.8rem; margin: 4px 0">
+                Device: <span id="audio-device-name">--</span>
+              </p>
+            </div>
+          </div>
 
-              <div class="setting-group">
-                <label for="fft-size">FFT Size (Resolution)</label>
-                <select id="fft-size">
-                  <option value="512">512</option>
-                  <option value="1024">1024</option>
-                  <option value="2048" selected>2048</option>
-                  <option value="4096">4096 (High Res)</option>
-                  <option value="8192">8192 (Ultra Res)</option>
-                  <option value="16384">16384 (Extreme)</option>
-                  <option value="32768">32768 (Max)</option>
-                </select>
-              </div>
-
-              <div
-                class="setting-group"
-                style="
-                  padding-bottom: 12px;
-                  border-bottom: 1px solid var(--border);
-                "
-              >
-                <label>Noise Analysis & Calibration</label>
-                <div style="display: flex; gap: 8px; margin-top: 8px">
-                  <button id="btn-calibrate" class="btn" style="flex: 1">
-                    Calibrate Noise
-                  </button>
-                  <button id="btn-clear-calibrate" class="btn" style="flex: 1">
-                    Clear
-                  </button>
-                </div>
-                <div
-                  id="noise-stats"
-                  style="
-                    margin-top: 8px;
-                    font-family: monospace;
-                    font-size: 0.8rem;
-                    color: var(--text-muted);
-                    line-height: 1.4;
-                  "
-                >
-                  Profile: None<br />
-                  Avg Noise Level: -- dB<br />
-                  Type: --
-                </div>
-              </div>
-
-              <div
-                class="setting-group"
-                style="
-                  padding-bottom: 12px;
-                  border-bottom: 1px solid var(--border);
-                "
-              >
-                <label>Reference Snapshot</label>
-                <div style="display: flex; gap: 8px; margin-top: 8px">
-                  <button id="btn-snapshot" class="btn" style="flex: 1">
-                    Take Snapshot
-                  </button>
-                  <button id="btn-clear-snapshot" class="btn" style="flex: 1">
-                    Clear
-                  </button>
-                </div>
-              </div>
-
-              <div class="setting-group">
-                <label for="spectrum-view">Spectrum View</label>
-                <select id="spectrum-view">
-                  <option value="fft" selected>FFT (High Res)</option>
-                  <option value="oct13">1/3 Octave Bands</option>
-                  <option value="oct16">1/6 Octave Bands</option>
-                </select>
-              </div>
-
-              <div class="setting-group">
-                <label
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    font-size: 0.9rem;
-                  "
-                >
-                  <span>Infinite Peak Hold</span>
-                  <input
-                    type="checkbox"
-                    id="peak-hold-inf"
-                    style="accent-color: var(--accent)"
-                  />
-                </label>
-              </div>
-
-              <div
-                class="setting-group"
-                style="
-                  padding-bottom: 12px;
-                  border-bottom: 1px solid var(--border);
-                "
-              >
-                <label>Toggle Visualizers</label>
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 8px;
-                    margin-top: 8px;
-                  "
-                >
-                  <label
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      cursor: pointer;
-                      color: var(--text-main);
-                      font-size: 0.8rem;
-                      background: var(--bg-card);
-                      padding: 6px;
-                      border-radius: 3px;
-                      border: 1px solid var(--border);
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      id="toggle-fsa"
-                      checked
-                      style="accent-color: var(--accent)"
-                    />
-                    FSA
-                  </label>
-                  <label
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      cursor: pointer;
-                      color: var(--text-main);
-                      font-size: 0.8rem;
-                      background: var(--bg-card);
-                      padding: 6px;
-                      border-radius: 3px;
-                      border: 1px solid var(--border);
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      id="toggle-audio-fsa"
-                      checked
-                      style="accent-color: var(--accent)"
-                    />
-                    Audio FSA
-                  </label>
-                  <label
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      cursor: pointer;
-                      color: var(--text-main);
-                      font-size: 0.8rem;
-                      background: var(--bg-card);
-                      padding: 6px;
-                      border-radius: 3px;
-                      border: 1px solid var(--border);
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      id="toggle-spectrogram"
-                      checked
-                      style="accent-color: var(--accent)"
-                    />
-                    Spectral
-                  </label>
-                  <label
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      cursor: pointer;
-                      color: var(--text-main);
-                      font-size: 0.8rem;
-                      background: var(--bg-card);
-                      padding: 6px;
-                      border-radius: 3px;
-                      border: 1px solid var(--border);
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      id="toggle-oscilloscope"
-                      checked
-                      style="accent-color: var(--accent)"
-                    />
-                    Oscillo
-                  </label>
-                  <label
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 6px;
-                      cursor: pointer;
-                      color: var(--text-main);
-                      font-size: 0.8rem;
-                      background: var(--bg-card);
-                      padding: 6px;
-                      border-radius: 3px;
-                      border: 1px solid var(--border);
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      id="toggle-vectorscope"
-                      checked
-                      style="accent-color: var(--accent)"
-                    />
-                    Vector
-                  </label>
-                </div>
-              </div>
-
-              <div class="setting-group">
-                <label
-                  for="smoothing"
-                  style="display: flex; justify-content: space-between"
-                >
-                  <span>Smoothing</span>
-                  <span
-                    id="smoothing-val"
-                    style="
-                      font-family: ui-monospace, monospace;
-                      color: var(--text-main);
-                    "
-                    >0.85</span
-                  >
-                </label>
-                <input
-                  type="range"
-                  id="smoothing"
-                  min="0"
-                  max="0.99"
-                  step="0.01"
-                  value="0.85"
-                />
-              </div>
-
-              <div class="setting-group">
-                <label
-                  for="min-db"
-                  style="display: flex; justify-content: space-between"
-                >
-                  <span>Min dB</span>
-                  <span
-                    id="min-db-val"
-                    style="
-                      font-family: ui-monospace, monospace;
-                      color: var(--text-main);
-                    "
-                    >-90</span
-                  >
-                </label>
-                <input
-                  type="range"
-                  id="min-db"
-                  min="-140"
-                  max="-50"
-                  step="1"
-                  value="-90"
-                />
-              </div>
-
-              <div class="setting-group">
-                <label
-                  for="max-db"
-                  style="display: flex; justify-content: space-between"
-                >
-                  <span>Max dB</span>
-                  <span
-                    id="max-db-val"
-                    style="
-                      font-family: ui-monospace, monospace;
-                      color: var(--text-main);
-                    "
-                    >-10</span
-                  >
-                </label>
-                <input
-                  type="range"
-                  id="max-db"
-                  min="-40"
-                  max="0"
-                  step="1"
-                  value="-10"
-                />
-              </div>
+          <!-- Analyzer Settings -->
+          <div class="panel">
+            <h2>Analyzer Settings</h2>
+            <div class="setting-group">
+              <label for="metering-standard">Metering Standard</label>
+              <select id="metering-standard" style="width: 100%">
+                <option value="peak" selected>Peak (True Peak)</option>
+                <option value="rms">RMS</option>
+                <option value="lufs">LUFS (Approximation)</option>
+              </select>
             </div>
 
-            <div class="panel">
-              <h2
+            <div class="setting-group">
+              <label for="fft-size">FFT Size (Resolution)</label>
+              <select id="fft-size">
+                <option value="512">512</option>
+                <option value="1024">1024</option>
+                <option value="2048" selected>2048</option>
+                <option value="4096">4096 (High Res)</option>
+                <option value="8192">8192 (Ultra Res)</option>
+                <option value="16384">16384 (Extreme)</option>
+                <option value="32768">32768 (Max)</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label
+                for="smoothing"
+                style="display: flex; justify-content: space-between"
+              >
+                <span>Smoothing</span>
+                <span
+                  id="smoothing-val"
+                  style="
+                    font-family: ui-monospace, monospace;
+                    color: var(--text-main);
+                  "
+                  >0.85</span
+                >
+              </label>
+              <input
+                type="range"
+                id="smoothing"
+                min="0"
+                max="0.99"
+                step="0.01"
+                value="0.85"
+              />
+            </div>
+
+            <div class="setting-group">
+              <label
+                for="min-db"
+                style="display: flex; justify-content: space-between"
+              >
+                <span>Min dB</span>
+                <span
+                  id="min-db-val"
+                  style="
+                    font-family: ui-monospace, monospace;
+                    color: var(--text-main);
+                  "
+                  >-90</span
+                >
+              </label>
+              <input
+                type="range"
+                id="min-db"
+                min="-140"
+                max="-50"
+                step="1"
+                value="-90"
+              />
+            </div>
+
+            <div class="setting-group">
+              <label
+                for="max-db"
+                style="display: flex; justify-content: space-between"
+              >
+                <span>Max dB</span>
+                <span
+                  id="max-db-val"
+                  style="
+                    font-family: ui-monospace, monospace;
+                    color: var(--text-main);
+                  "
+                  >-10</span
+                >
+              </label>
+              <input
+                type="range"
+                id="max-db"
+                min="-40"
+                max="0"
+                step="1"
+                value="-10"
+              />
+            </div>
+
+            <div class="setting-group">
+              <label
                 style="
                   display: flex;
                   justify-content: space-between;
                   align-items: center;
+                  font-size: 0.9rem;
+                "
+              >
+                <span>Infinite Peak Hold</span>
+                <input
+                  type="checkbox"
+                  id="peak-hold-inf"
+                  style="accent-color: var(--accent)"
+                />
+              </label>
+            </div>
+
+            <div class="setting-group">
+              <label for="spectrum-view">Spectrum View</label>
+              <select id="spectrum-view">
+                <option value="fft" selected>FFT (High Res)</option>
+                <option value="oct13">1/3 Octave Bands</option>
+                <option value="oct16">1/6 Octave Bands</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Visual Settings -->
+          <div class="panel">
+            <h2>Visual Settings</h2>
+            <div class="setting-group">
+              <label>Toggle Visualizers</label>
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 8px;
+                  margin-top: 8px;
+                "
+              >
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: var(--text-main);
+                    font-size: 0.8rem;
+                    background: var(--bg-card);
+                    padding: 6px;
+                    border-radius: 3px;
+                    border: 1px solid var(--border);
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="toggle-fsa"
+                    checked
+                    style="accent-color: var(--accent)"
+                  />
+                  FSA
+                </label>
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: var(--text-main);
+                    font-size: 0.8rem;
+                    background: var(--bg-card);
+                    padding: 6px;
+                    border-radius: 3px;
+                    border: 1px solid var(--border);
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="toggle-audio-fsa"
+                    checked
+                    style="accent-color: var(--accent)"
+                  />
+                  Audio FSA
+                </label>
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: var(--text-main);
+                    font-size: 0.8rem;
+                    background: var(--bg-card);
+                    padding: 6px;
+                    border-radius: 3px;
+                    border: 1px solid var(--border);
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="toggle-spectrogram"
+                    checked
+                    style="accent-color: var(--accent)"
+                  />
+                  Spectral
+                </label>
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: var(--text-main);
+                    font-size: 0.8rem;
+                    background: var(--bg-card);
+                    padding: 6px;
+                    border-radius: 3px;
+                    border: 1px solid var(--border);
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="toggle-oscilloscope"
+                    checked
+                    style="accent-color: var(--accent)"
+                  />
+                  Oscillo
+                </label>
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    color: var(--text-main);
+                    font-size: 0.8rem;
+                    background: var(--bg-card);
+                    padding: 6px;
+                    border-radius: 3px;
+                    border: 1px solid var(--border);
+                  "
+                >
+                  <input
+                    type="checkbox"
+                    id="toggle-vectorscope"
+                    checked
+                    style="accent-color: var(--accent)"
+                  />
+                  Vector
+                </label>
+              </div>
+            </div>
+
+            <div class="setting-group">
+              <label for="spec-theme">Spectrogram Theme</label>
+              <select id="spec-theme">
+                <option value="classic">Classic</option>
+                <option value="fire">Fire</option>
+                <option value="ocean">Ocean</option>
+                <option value="matrix">Matrix</option>
+                <option value="grayscale">Grayscale</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label for="spec-mode">Spectrogram Mode</label>
+              <select id="spec-mode">
+                <option value="standard">Standard</option>
+                <option value="waterfall">Waterfall</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label for="update-rate">Update Rate (FPS)</label>
+              <select id="update-rate">
+                <option value="60" selected>60 FPS</option>
+                <option value="30">30 FPS</option>
+                <option value="15">15 FPS</option>
+                <option value="10">10 FPS</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label for="freq-scale">FSA Scale</label>
+              <select id="freq-scale">
+                <option value="linear">Linear</option>
+                <option value="logarithmic" selected>Logarithmic</option>
+              </select>
+            </div>
+
+            <div class="setting-group">
+              <label>Frequency Range (Hz)</label>
+              <div style="display: flex; gap: 0.5rem">
+                <input
+                  type="number"
+                  id="freq-min"
+                  value="20"
+                  min="1"
+                  max="20000"
+                  style="
+                    flex: 1;
+                    padding: 0.4rem;
+                    background: var(--bg-dark);
+                    color: var(--text-main);
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                  "
+                />
+                <span style="align-self: center">-</span>
+                <input
+                  type="number"
+                  id="freq-max"
+                  value="20000"
+                  min="100"
+                  max="24000"
+                  style="
+                    flex: 1;
+                    padding: 0.4rem;
+                    background: var(--bg-dark);
+                    color: var(--text-main);
+                    border: 1px solid var(--border);
+                    border-radius: 4px;
+                  "
+                />
+              </div>
+            </div>
+
+            <div class="setting-group">
+              <label
+                for="peak-count"
+                style="display: flex; justify-content: space-between"
+              >
+                <span>Show Peaks</span>
+                <span
+                  id="peak-count-val"
+                  style="
+                    font-family: ui-monospace, monospace;
+                    color: var(--text-main);
+                  "
+                  >10</span
+                >
+              </label>
+              <input
+                type="range"
+                id="peak-count"
+                min="0"
+                max="20"
+                step="1"
+                value="10"
+              />
+            </div>
+          </div>
+
+          <!-- Monitoring & Tools -->
+          <div class="panel">
+            <h2>Monitoring & Tools</h2>
+            <div class="setting-group">
+              <label>Noise Analysis & Calibration</label>
+              <div style="display: flex; gap: 8px; margin-top: 8px">
+                <button id="btn-calibrate" class="btn" style="flex: 1">
+                  Calibrate Noise
+                </button>
+                <button id="btn-clear-calibrate" class="btn" style="flex: 1">
+                  Clear
+                </button>
+              </div>
+              <div
+                id="noise-stats"
+                style="
+                  margin-top: 8px;
+                  font-family: monospace;
+                  font-size: 0.8rem;
+                  color: var(--text-muted);
+                  line-height: 1.4;
+                "
+              >
+                Profile: None<br />
+                Avg Noise Level: -- dB<br />
+                Type: --
+              </div>
+            </div>
+
+            <div class="setting-group">
+              <label>Reference Snapshot</label>
+              <div style="display: flex; gap: 8px; margin-top: 8px">
+                <button id="btn-snapshot" class="btn" style="flex: 1">
+                  Take Snapshot
+                </button>
+                <button id="btn-clear-snapshot" class="btn" style="flex: 1">
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-group">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                "
+              >
+                <label style="margin: 0">Event Log (Clip/Howling)</label>
+                <button
+                  id="btn-clear-clips"
+                  class="btn"
+                  style="padding: 2px 6px; font-size: 0.75rem"
+                >
+                  Clear
+                </button>
+              </div>
+              <div id="clip-log-container">
+                <div
+                  style="
+                    color: var(--text-muted);
+                    text-align: center;
+                    padding: 8px 0;
+                  "
+                  id="clip-log-empty"
+                >
+                  No clips recorded
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Signal Generation -->
+          <div class="panel">
+            <h2>Signal Tools</h2>
+
+            <div
+              style="
+                margin-bottom: 16px;
+                border-bottom: 1px solid var(--border);
+                padding-bottom: 12px;
+              "
+            >
+              <h3
+                style="
+                  font-size: 0.9rem;
+                  margin-bottom: 12px;
+                  color: var(--accent);
                 "
               >
                 Test Tone Gen
-                <div
-                  id="tone-status"
-                  style="
-                    font-size: 0.7rem;
-                    font-weight: 600;
-                    color: var(--color-warn);
-                    display: none;
-                    background: rgba(194, 153, 74, 0.15);
-                    padding: 2px 6px;
-                    border-radius: 2px;
-                    letter-spacing: 0.05em;
-                  "
-                >
-                  RUNNING
-                </div>
-              </h2>
+              </h3>
               <div class="setting-group" style="margin-bottom: 12px">
                 <button
                   id="btn-tone"
@@ -717,132 +718,130 @@
                 />
               </div>
             </div>
-          </div>
 
-          <div class="panel">
-            <h2
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-              "
-            >
-              FSK Modem (Data over Sound)
-              <div
-                id="modem-status"
+            <div>
+              <h3
                 style="
-                  font-size: 0.75rem;
-                  font-weight: normal;
-                  color: #10b981;
-                  display: none;
+                  font-size: 0.9rem;
+                  margin-bottom: 12px;
+                  color: var(--accent);
                 "
               >
-                (Receiving)
+                FSK Modem
+              </h3>
+              <div
+                class="setting-group"
+                style="display: flex; gap: 0.5rem; flex-wrap: wrap"
+              >
+                <div style="flex: 1">
+                  <label for="modem-mode">Freq Band</label>
+                  <select id="modem-mode" style="width: 100%">
+                    <option value="low">Low Pitch (300/700)</option>
+                    <option value="audible" selected>
+                      Audible (1.2k/2.2k)
+                    </option>
+                    <option value="mid">Mid Pitch (4k/5k)</option>
+                    <option value="high">High Pitch (10k/12k)</option>
+                    <option value="near_ultrasonic">
+                      Near Ultrasonic (15k/16k)
+                    </option>
+                    <option value="ultrasonic">Ultrasonic (18k/19k)</option>
+                    <option value="extreme">
+                      Extreme Ultrasonic (20k/21k)
+                    </option>
+                  </select>
+                </div>
+                <div style="flex: 1">
+                  <label for="modem-speed">Speed</label>
+                  <select id="modem-speed" style="width: 100%">
+                    <option value="20">Robust (20 bps)</option>
+                    <option value="50">Normal (50 bps)</option>
+                    <option value="100">Fast Data (100 bps)</option>
+                    <option value="300">File Transfer (300 bps)</option>
+                  </select>
+                </div>
+                <div style="flex: 1; display: flex; align-items: flex-end">
+                  <button
+                    id="btn-modem-rx"
+                    class="btn"
+                    style="width: 100%; padding: 4px"
+                  >
+                    Start Rx
+                  </button>
+                </div>
               </div>
-            </h2>
 
-            <div
-              class="setting-group"
-              style="display: flex; gap: 0.5rem; flex-wrap: wrap"
-            >
-              <div style="flex: 1">
-                <label for="modem-mode">Frequency Band</label>
-                <select id="modem-mode" style="width: 100%">
-                  <option value="low">Low Pitch (300/700)</option>
-                  <option value="audible" selected>Audible (1.2k/2.2k)</option>
-                  <option value="mid">Mid Pitch (4k/5k)</option>
-                  <option value="high">High Pitch (10k/12k)</option>
-                  <option value="near_ultrasonic">
-                    Near Ultrasonic (15k/16k)
-                  </option>
-                  <option value="ultrasonic">Ultrasonic (18k/19k)</option>
-                  <option value="extreme">Extreme Ultrasonic (20k/21k)</option>
-                </select>
+              <div class="setting-group">
+                <label for="modem-tx-text">Transmit Text</label>
+                <div style="display: flex; gap: 0.5rem">
+                  <input
+                    type="text"
+                    id="modem-tx-text"
+                    placeholder="Type here..."
+                    style="
+                      flex: 1;
+                      padding: 0.4rem;
+                      background: var(--bg-dark);
+                      color: var(--text-main);
+                      border: 1px solid var(--border);
+                      border-radius: 4px;
+                    "
+                  />
+                  <button
+                    id="btn-modem-tx"
+                    class="btn"
+                    style="padding: 4px 12px"
+                  >
+                    Send
+                  </button>
+                </div>
               </div>
-              <div style="flex: 1">
-                <label for="modem-speed">Speed</label>
-                <select id="modem-speed" style="width: 100%">
-                  <option value="20">Robust (20 bps)</option>
-                  <option value="50">Normal (50 bps)</option>
-                  <option value="100">Fast Data (100 bps)</option>
-                  <option value="300">File Transfer (300 bps)</option>
-                </select>
-              </div>
-              <div style="flex: 1; display: flex; align-items: flex-end">
-                <button
-                  id="btn-modem-rx"
-                  class="btn"
-                  style="width: 100%; padding: 4px"
+
+              <div class="setting-group">
+                <label for="modem-vol"
+                  >Tx Volume (Gain):
+                  <span id="modem-vol-val">-12</span> dB</label
                 >
-                  Start Rx
-                </button>
-              </div>
-            </div>
-
-            <div class="setting-group">
-              <label for="modem-tx-text">Transmit Text</label>
-              <div style="display: flex; gap: 0.5rem">
                 <input
-                  type="text"
-                  id="modem-tx-text"
-                  placeholder="Type here..."
+                  type="range"
+                  id="modem-vol"
+                  min="-60"
+                  max="0"
+                  step="1"
+                  value="-12"
+                />
+              </div>
+
+              <div class="setting-group">
+                <label>Received Data</label>
+                <textarea
+                  id="modem-rx-log"
+                  readonly
                   style="
-                    flex: 1;
+                    width: 100%;
+                    height: 60px;
                     padding: 0.4rem;
                     background: var(--bg-dark);
-                    color: var(--text-main);
+                    color: #facc15;
                     border: 1px solid var(--border);
                     border-radius: 4px;
+                    font-family: monospace;
+                    resize: none;
                   "
-                />
-                <button id="btn-modem-tx" class="btn" style="padding: 4px 12px">
-                  Send
+                  placeholder="Waiting for signal..."
+                ></textarea>
+                <button
+                  id="btn-modem-clear"
+                  class="btn"
+                  style="margin-top: 4px; width: 100%; padding: 4px"
+                >
+                  Clear Log
                 </button>
               </div>
             </div>
-
-            <div class="setting-group">
-              <label for="modem-vol"
-                >Tx Volume (Gain): <span id="modem-vol-val">-12</span> dB</label
-              >
-              <input
-                type="range"
-                id="modem-vol"
-                min="-60"
-                max="0"
-                step="1"
-                value="-12"
-              />
-            </div>
-
-            <div class="setting-group">
-              <label>Received Data</label>
-              <textarea
-                id="modem-rx-log"
-                readonly
-                style="
-                  width: 100%;
-                  height: 60px;
-                  padding: 0.4rem;
-                  background: var(--bg-dark);
-                  color: #facc15;
-                  border: 1px solid var(--border);
-                  border-radius: 4px;
-                  font-family: monospace;
-                  resize: none;
-                "
-                placeholder="Waiting for signal..."
-              ></textarea>
-              <button
-                id="btn-modem-clear"
-                class="btn"
-                style="margin-top: 4px; width: 100%; padding: 4px"
-              >
-                Clear Log
-              </button>
-            </div>
           </div>
 
+          <!-- Spectrogram Drawer -->
           <div class="panel">
             <h2>Spectrogram Drawer</h2>
             <div class="setting-group">
@@ -1341,7 +1340,21 @@
     <div id="bottom-music-player">
       <div id="bmp-header">
         <span class="bmp-title">Audio Player</span>
-        <button id="bmp-toggle-btn">▼</button>
+        <button id="bmp-toggle-btn">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
       </div>
       <div id="bmp-body">
         <div class="bmp-controls">
@@ -1356,9 +1369,53 @@
             style="display: none"
           />
 
-          <button id="bmp-prev" class="bmp-btn" disabled>⏮</button>
-          <button id="bmp-play" class="bmp-btn-main" disabled>▶</button>
-          <button id="bmp-next" class="bmp-btn" disabled>⏭</button>
+          <button id="bmp-prev" class="bmp-btn" disabled>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="19 20 9 12 19 4" />
+              <line x1="5" x2="5" y1="19" y2="5" />
+            </svg>
+          </button>
+          <button id="bmp-play" class="bmp-btn-main" disabled>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          </button>
+          <button id="bmp-next" class="bmp-btn" disabled>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="5 4 15 12 5 20" />
+              <line x1="19" x2="19" y1="5" y2="19" />
+            </svg>
+          </button>
 
           <div
             class="bmp-volume-container"
@@ -1370,7 +1427,22 @@
               right: 0;
             "
           >
-            <span style="font-size: 1.2rem">🔊</span>
+            <span style="font-size: 1.2rem">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            </span>
             <input
               type="range"
               id="bmp-volume"
@@ -1411,6 +1483,28 @@
           >
             <span>Equalizer</span>
             <div style="display: flex; gap: 6px">
+              <select id="bmp-eq-env-preset" class="bmp-preset-select">
+                <option value="flat">Env: Flat</option>
+                <option value="live">Live</option>
+                <option value="3d">3D</option>
+                <option value="theatre">Theatre</option>
+                <option value="outdoor">Outdoor</option>
+                <option value="indoor-large">Indoor Large</option>
+                <option value="indoor-middle">Indoor Middle</option>
+                <option value="indoor-small">Indoor Small</option>
+                <option value="headphone">Headphone</option>
+                <option value="earphone">Earphone</option>
+              </select>
+              <select id="bmp-eq-preset" class="bmp-preset-select">
+                <option value="flat">Flat</option>
+                <option value="bass">Bass Boost</option>
+                <option value="treble">Treble Boost</option>
+                <option value="vocal">Vocal Boost</option>
+                <option value="pop">Pop</option>
+                <option value="rock">Rock</option>
+                <option value="jazz">Jazz</option>
+                <option value="classical">Classical</option>
+              </select>
               <button id="bmp-eq-auto" class="bmp-btn-auto">Auto EQ</button>
               <button id="bmp-eq-reset" class="bmp-btn-reset">Reset</button>
             </div>

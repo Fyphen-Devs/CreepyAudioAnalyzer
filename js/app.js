@@ -395,7 +395,7 @@ export async function initApp() {
 
   dom.btnMic.addEventListener("click", async () => {
     if (state.isRunning) {
-      audio.stopAudio();
+      await audio.stopAudio();
     } else {
       await audio.startAudio();
     }

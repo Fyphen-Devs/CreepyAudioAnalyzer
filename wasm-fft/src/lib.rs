@@ -75,6 +75,32 @@ impl WasmFft {
         }
     }
 
+    pub fn process_db(&self, alpha: f32, n: f32, output: &mut [f32]) {
+        for i in 0..self.size.min(output.len()) {
+            let mag = self.magnitude_buffer[i] / n;
+            let mag_clamped = if mag < 1e-10 { 1e-10 } else { mag };
+            let db = 20.0 * mag_clamped.log10();
+
+            let prev_db = output[i];
+            if !prev_db.is_finite() {
+                output[i] = db;
+            } else {
+                output[i] = alpha * prev_db + (1.0 - alpha) * db;
+            }
+        }
+    }
+
+    pub fn smooth_coherence(&self, alpha: f32, output: &mut [f32]) {
+        for i in 0..self.size.min(output.len()) {
+            let val = self.coherence_data[i];
+            if val.is_nan() {
+                output[i] = 0.0;
+            } else {
+                output[i] = output[i] * (1.0 - alpha) + val * alpha;
+            }
+        }
+    }
+
     /// マグニチュード（振幅）バッファのポインタを取得
     pub fn magnitude_ptr(&self) -> *const f32 {
         self.magnitude_buffer.as_ptr()
@@ -107,7 +133,7 @@ impl WasmFft {
             let my = ap_mag[i];
             let px = mic_phase[i];
             let py = ap_phase[i];
-// ...existing code...
+
             let pxx = mx * mx;
             let pyy = my * my;
             let phase_diff = px - py;
@@ -133,25 +159,49 @@ impl WasmFft {
 
     pub fn calculate_delay(&mut self, sample_rate: f32) -> f32 {
         let delta_f = sample_rate / self.size as f32;
-        let mut weighted_sum_tau = 0.0;
-        let mut sum_coh = 0.0;
+        let half_size = self.size / 2;
+        let mut sum_w = 0.0;
+        let mut sum_w_f = 0.0;
+        let mut sum_w_phi = 0.0;
+        let mut sum_w_ff = 0.0;
+        let mut sum_w_fphi = 0.0;
 
-        for i in 0..self.size - 1 {
-            let phi1 = self.coh_pxy_im[i].atan2(self.coh_pxy_re[i]);
-            let phi2 = self.coh_pxy_im[i + 1].atan2(self.coh_pxy_re[i + 1]);
-            let diff = phi2 - phi1;
-            let wrapped_diff = diff.sin().atan2(diff.cos());
-            let tau = wrapped_diff / (2.0 * std::f32::consts::PI * delta_f);
-            
-            self.delay_data[i] = tau;
+        let mut prev_raw_phase: Option<f32> = None;
+        let mut unwrapped_phase = 0.0;
 
-            let coh = self.coherence_data[i];
-            weighted_sum_tau += tau * coh;
-            sum_coh += coh;
+        for i in 1..half_size {
+            let raw_phase = self.coh_pxy_im[i].atan2(self.coh_pxy_re[i]);
+            if let Some(prev_phase) = prev_raw_phase {
+                let phase_step = raw_phase - prev_phase;
+                let wrapped_step = phase_step.sin().atan2(phase_step.cos());
+                unwrapped_phase += wrapped_step;
+            } else {
+                unwrapped_phase = raw_phase;
+            }
+            prev_raw_phase = Some(raw_phase);
+
+            let coh = self.coherence_data[i].clamp(0.0, 1.0);
+            let power = ((self.coh_pxx[i] + self.coh_pyy[i]) * 0.5).max(1e-30);
+            let weight = coh * power;
+            if weight <= 1e-20 {
+                self.delay_data[i] = 0.0;
+                continue;
+            }
+
+            let freq = i as f32 * delta_f;
+            self.delay_data[i] = -unwrapped_phase / (2.0 * std::f32::consts::PI * freq.max(1e-12));
+
+            sum_w += weight;
+            sum_w_f += weight * freq;
+            sum_w_phi += weight * unwrapped_phase;
+            sum_w_ff += weight * freq * freq;
+            sum_w_fphi += weight * freq * unwrapped_phase;
         }
 
-        if sum_coh > 0.0 {
-            weighted_sum_tau / sum_coh
+        let denom = sum_w * sum_w_ff - sum_w_f * sum_w_f;
+        if sum_w > 0.0 && denom.abs() > 1e-20 {
+            let slope = (sum_w * sum_w_fphi - sum_w_f * sum_w_phi) / denom;
+            -slope / (2.0 * std::f32::consts::PI)
         } else {
             0.0
         }

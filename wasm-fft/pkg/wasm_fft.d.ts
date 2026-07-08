@@ -22,10 +22,12 @@ export class WasmFft {
      * FFTを実行し、振幅と位相を計算する
      */
     process(): void;
+    process_db(alpha: number, n: number, output: Float32Array): void;
     /**
      * JS側から入力データ（Float32Array）を渡してセットする
      */
     set_input(input_data: Float32Array): void;
+    smooth_coherence(alpha: number, output: Float32Array): void;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -42,7 +44,9 @@ export interface InitOutput {
     readonly wasmfft_new: (a: number) => number;
     readonly wasmfft_phase_ptr: (a: number) => number;
     readonly wasmfft_process: (a: number) => void;
+    readonly wasmfft_process_db: (a: number, b: number, c: number, d: number, e: number, f: any) => void;
     readonly wasmfft_set_input: (a: number, b: number, c: number) => void;
+    readonly wasmfft_smooth_coherence: (a: number, b: number, c: number, d: number, e: any) => void;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_start: () => void;

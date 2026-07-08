@@ -178,6 +178,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     currentU8DataSpecMap.set(gl, currentU8Data);
   }
 
+  const invDbRange = 1 / dbRange;
   let maxFreqVal = -Infinity;
   let maxFreqIndex = 0;
 
@@ -187,7 +188,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
       maxFreqVal = val;
       maxFreqIndex = i;
     }
-    let p = (val - minDb) / dbRange;
+    let p = (val - minDb) * invDbRange;
     if (p < 0) p = 0;
     else if (p > 1) p = 1;
     currentU8Data[i] = p * 255;
@@ -281,7 +282,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
       // avg energy for band
       let sumPower = 0;
       for (let i = binStart; i < binEnd; i++) {
-        sumPower += Math.pow(10, freqData[i] / 10);
+        sumPower += 10 ** (freqData[i] / 10);
       }
       let avgDb = 10 * Math.log10(sumPower / (binEnd - binStart));
       if (isNaN(avgDb)) avgDb = minDb;
@@ -319,18 +320,20 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
     ctxOvl.lineWidth = 1.5;
     ctxOvl.setLineDash(dash);
 
+    const invHzPerBin = 1 / hzPerBin;
+    const invWSpec = 1 / wSpec;
     let freqLog = Math.pow(10, logMinFreq);
     const freqLogMult = Math.pow(10, (2 / wSpec) * logMaxMinRatio);
 
     for (let x = 0; x < wSpec; x += 2) {
       let freqIndex;
       if (useLogScale) {
-        freqIndex = freqLog / hzPerBin;
+        freqIndex = freqLog * invHzPerBin;
         freqLog *= freqLogMult;
       } else {
-        let pc = x / wSpec;
+        let pc = x * invWSpec;
         let freq = minFreqLog + pc * linearRange;
-        freqIndex = freq / hzPerBin;
+        freqIndex = freq * invHzPerBin;
       }
 
       if (freqIndex >= 0 && freqIndex < bufferLength) {
@@ -626,16 +629,24 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
       )
     : dom.peakFreqValue;
   if (peakFreqValEl) {
-    if (state.audioCtx && maxFreqVal > minDb + 10) {
-      const dominantFreq = maxFreqIndex * hzPerBin;
-      const text = dominantFreq.toFixed(0);
-      if (peakFreqValEl.textContent !== text) {
-        peakFreqValEl.textContent = text;
+    const now = performance.now();
+    const lastUpdate = isAudioPlayer
+      ? state.lastAudioPeakFreqUpdate
+      : state.lastPeakFreqUpdate;
+    if (!lastUpdate || now - lastUpdate > 100) {
+      if (state.audioCtx && maxFreqVal > minDb + 10) {
+        const dominantFreq = maxFreqIndex * hzPerBin;
+        const text = dominantFreq.toFixed(0);
+        if (peakFreqValEl.textContent !== text) {
+          peakFreqValEl.textContent = text;
+        }
+      } else {
+        if (peakFreqValEl.textContent !== "--") {
+          peakFreqValEl.textContent = "--";
+        }
       }
-    } else {
-      if (peakFreqValEl.textContent !== "--") {
-        peakFreqValEl.textContent = "--";
-      }
+      if (isAudioPlayer) state.lastAudioPeakFreqUpdate = now;
+      else state.lastPeakFreqUpdate = now;
     }
   }
 

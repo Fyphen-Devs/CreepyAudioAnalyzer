@@ -230,6 +230,9 @@ export function initBottomPlayer() {
     const resetBtn = document.getElementById("bmp-eq-reset");
     if (resetBtn) {
       resetBtn.addEventListener("click", () => {
+        const presetSelect = document.getElementById("bmp-eq-preset");
+        if (presetSelect) presetSelect.value = "flat";
+
         const sliders = eqControls.querySelectorAll(".bmp-eq-slider");
         sliders.forEach((slider, index) => {
           slider.value = "0";
@@ -244,6 +247,10 @@ export function initBottomPlayer() {
     const autoBtn = document.getElementById("bmp-eq-auto");
     if (autoBtn) {
       autoBtn.addEventListener("click", async () => {
+        // Reset preset selector to "flat" if it was set to something else
+        const presetSelect = document.getElementById("bmp-eq-preset");
+        if (presetSelect) presetSelect.value = "flat";
+
         autoBtn.textContent = "Analyzing...";
         autoBtn.disabled = true;
 
@@ -261,6 +268,80 @@ export function initBottomPlayer() {
 
         autoBtn.textContent = "Auto EQ";
         autoBtn.disabled = false;
+      });
+    }
+
+    // Preset functionality
+    const presetSelect = document.getElementById("bmp-eq-preset");
+    if (presetSelect) {
+      const presets = {
+        flat: [0, 0, 0, 0, 0, 0, 0, 0],
+        bass: [6, 4, 2, 0, 0, 0, 0, 0],
+        treble: [0, 0, 0, 0, 0, 2, 4, 6],
+        vocal: [0, 0, 0, 3, 6, 3, 0, 0],
+        pop: [3, 2, 0, -1, -1, 0, 2, 3],
+        rock: [5, 3, -1, -2, -1, 3, 5, 4],
+        jazz: [4, 2, 1, 0, 0, 1, 2, 4],
+        classical: [2, 1, 0, 0, 0, 0, 1, 2],
+      };
+
+      presetSelect.addEventListener("change", () => {
+        const envPresetSelect = document.getElementById("bmp-eq-env-preset");
+        if (envPresetSelect) envPresetSelect.value = "flat";
+
+        const gains = presets[presetSelect.value];
+        if (gains) {
+          const sliders = eqControls.querySelectorAll(".bmp-eq-slider");
+          gains.forEach((gain, index) => {
+            if (sliders[index]) {
+              sliders[index].value = gain;
+              if (
+                window.audioController &&
+                window.audioController.updateEqGain
+              ) {
+                window.audioController.updateEqGain(index, gain);
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // Environment Preset functionality
+    const envPresetSelect = document.getElementById("bmp-eq-env-preset");
+    if (envPresetSelect) {
+      const envPresets = {
+        flat: [0, 0, 0, 0, 0, 0, 0, 0],
+        live: [4, 2, 0, -2, 0, 2, 4, 6],
+        "3d": [6, 2, -2, -4, -2, 2, 6, 8],
+        theatre: [3, 4, 2, 0, 1, 2, 3, 4],
+        outdoor: [6, 4, 2, 1, 0, 3, 5, 6],
+        "indoor-large": [2, 0, -2, -3, 0, 2, 4, 5],
+        "indoor-middle": [2, 1, -1, -1, 0, 1, 3, 4],
+        "indoor-small": [0, -1, -2, 0, 0, 1, 2, 3],
+        headphone: [5, 3, 0, -1, 0, 1, 3, 5],
+        earphone: [7, 4, 1, 0, 1, 3, 4, 6],
+      };
+
+      envPresetSelect.addEventListener("change", () => {
+        const presetSelect = document.getElementById("bmp-eq-preset");
+        if (presetSelect) presetSelect.value = "flat";
+
+        const gains = envPresets[envPresetSelect.value];
+        if (gains) {
+          const sliders = eqControls.querySelectorAll(".bmp-eq-slider");
+          gains.forEach((gain, index) => {
+            if (sliders[index]) {
+              sliders[index].value = gain;
+              if (
+                window.audioController &&
+                window.audioController.updateEqGain
+              ) {
+                window.audioController.updateEqGain(index, gain);
+              }
+            }
+          });
+        }
       });
     }
   }
@@ -300,9 +381,11 @@ export function initBottomPlayer() {
 
   function updatePlayButton() {
     if (audio.paused) {
-      btnPlay.textContent = "▶";
+      btnPlay.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
     } else {
-      btnPlay.textContent = "⏸";
+      btnPlay.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
     }
   }
 
