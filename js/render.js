@@ -48,15 +48,15 @@ function buildFrameData({ state, dom, processAudioPlayer = false }) {
   const audioPlayerTimeData = state.audioPlayerTimeDataBuffer;
 
   if (!state.isFrozen) {
-    if (state.wasmFft) {
+    if (state.wasmFftMic) {
       // timeDataを取得してWASMのFFTにかける
       state.analyser.getFloatTimeDomainData(timeData);
-      state.wasmFft.set_input(timeData);
-      state.wasmFft.process();
+      state.wasmFftMic.set_input(timeData);
+      state.wasmFftMic.process();
 
       // WASMのメモリからマグニチュードとフェーズを取得
-      const magnitudePtr = state.wasmFft.magnitude_ptr();
-      const phasePtr = state.wasmFft.phase_ptr();
+      const magnitudePtr = state.wasmFftMic.magnitude_ptr();
+      const phasePtr = state.wasmFftMic.phase_ptr();
 
       // Check if WASM memory buffer has changed (reallocated)
       const wasmBuffer = state.wasmMemory.buffer;
@@ -77,24 +77,10 @@ function buildFrameData({ state, dom, processAudioPlayer = false }) {
         );
       }
 
-      const wasmMagBuf = state.wasmMagBuf;
-      const wasmPhaseBuf = state.wasmPhaseBuf;
-
-      if (!state.micWasmMag || state.micWasmMag.length !== wasmMagBuf.length) {
-        state.micWasmMag = new Float32Array(wasmMagBuf.length);
-        state.micWasmPhase = new Float32Array(wasmPhaseBuf.length);
-      }
-
-      // copy mic data for coherence calculation later
-      if (state.micWasmMag) {
-        state.micWasmMag.set(wasmMagBuf);
-        state.micWasmPhase.set(wasmPhaseBuf);
-      }
-
       const alpha = state.analyser.smoothingTimeConstant;
       const N = timeData.length;
 
-      state.wasmFft.process_db(alpha, N, freqData);
+      state.wasmFftMic.process_db(alpha, N, freqData);
 
       if (processAudioPlayer) {
         processAudioPlayerWasmFft(state, { N, alpha });

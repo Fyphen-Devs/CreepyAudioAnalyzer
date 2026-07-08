@@ -174,7 +174,7 @@ export function processAudioPlayerWasmFft(state, mic) {
     !state.audioPlayerAnalyser ||
     !state.audioPlayerTimeDataBuffer ||
     !state.audioPlayerFreqDataBuffer ||
-    !state.wasmFft
+    !state.wasmFftPlayer
   ) {
     return;
   }
@@ -183,11 +183,11 @@ export function processAudioPlayerWasmFft(state, mic) {
   const audioPlayerFreqData = state.audioPlayerFreqDataBuffer;
 
   state.audioPlayerAnalyser.getFloatTimeDomainData(audioPlayerTimeData);
-  state.wasmFft.set_input(audioPlayerTimeData);
-  state.wasmFft.process();
+  state.wasmFftPlayer.set_input(audioPlayerTimeData);
+  state.wasmFftPlayer.process();
 
-  const apMagPtr = state.wasmFft.magnitude_ptr();
-  const apPhasePtr = state.wasmFft.phase_ptr();
+  const apMagPtr = state.wasmFftPlayer.magnitude_ptr();
+  const apPhasePtr = state.wasmFftPlayer.phase_ptr();
   const wasmBuffer = state.wasmMemory.buffer;
   const len = audioPlayerTimeData.length;
 
@@ -205,18 +205,28 @@ export function processAudioPlayerWasmFft(state, mic) {
   const apAlpha = state.audioPlayerAnalyser.smoothingTimeConstant;
   const apN = audioPlayerTimeData.length;
 
-  state.wasmFft.process_db(apAlpha, apN, audioPlayerFreqData);
+  state.wasmFftPlayer.process_db(apAlpha, apN, audioPlayerFreqData);
 
   // ---- coherence & delay (WASM) ----
-  state.wasmFft.calculate_coherence(
-    state.micWasmMag,
-    state.micWasmPhase,
+  const micMagView = new Float32Array(
+    wasmBuffer,
+    state.wasmFftMic.magnitude_ptr(),
+    len,
+  );
+  const micPhaseView = new Float32Array(
+    wasmBuffer,
+    state.wasmFftMic.phase_ptr(),
+    len,
+  );
+  state.wasmFftPlayer.calculate_coherence(
+    micMagView,
+    micPhaseView,
     apMagPtr,
     apPhasePtr,
   );
 
-  const cohPtr = state.wasmFft.coherence_ptr();
-  const delayDataPtr = state.wasmFft.delay_data_ptr();
+  const cohPtr = state.wasmFftPlayer.coherence_ptr();
+  const delayDataPtr = state.wasmFftPlayer.delay_data_ptr();
   const bufferLength = audioPlayerFreqData.length;
 
   if (
@@ -237,12 +247,14 @@ export function processAudioPlayerWasmFft(state, mic) {
   // Smooth coherence data to reduce "jumping" and visual stress
   // Smoothing factor: lower = smoother/slower, higher = sharper/faster
   const cohSmoothing = 0.2;
-  state.wasmFft.smooth_coherence(cohSmoothing, state.coherenceData);
+  state.wasmFftPlayer.smooth_coherence(cohSmoothing, state.coherenceData);
 
   state.delayData.set(rawDelay);
 
   if (state.audioCtx && state.audioPlayerAnalyser) {
-    state.delay = state.wasmFft.calculate_delay(state.audioCtx.sampleRate);
+    state.delay = state.wasmFftPlayer.calculate_delay(
+      state.audioCtx.sampleRate,
+    );
   }
 }
 

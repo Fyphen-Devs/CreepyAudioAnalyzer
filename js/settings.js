@@ -108,8 +108,10 @@ export function bindSettings({
       state.audioPlayerAnalyser.fftSize = size;
     }
     if (state.WasmFftClass) {
-      if (state.wasmFft) state.wasmFft.free();
-      state.wasmFft = new state.WasmFftClass(size);
+      if (state.wasmFftMic) state.wasmFftMic.free();
+      if (state.wasmFftPlayer) state.wasmFftPlayer.free();
+      state.wasmFftMic = new state.WasmFftClass(size);
+      state.wasmFftPlayer = new state.WasmFftClass(size);
     }
   });
 
