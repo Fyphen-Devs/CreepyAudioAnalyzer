@@ -282,7 +282,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
       // avg energy for band
       let sumPower = 0;
       for (let i = binStart; i < binEnd; i++) {
-        sumPower += 10 ** (freqData[i] / 10);
+        sumPower += Math.exp(freqData[i] * 0.2302585092994046);
       }
       let avgDb = 10 * Math.log10(sumPower / (binEnd - binStart));
       if (isNaN(avgDb)) avgDb = minDb;
@@ -430,7 +430,7 @@ export function drawSpectrum({ state, dom, frame }, isAudioPlayer = false) {
   let sumPower = 0;
   let sampleCount = 0;
   for (let i = 0; i < bufferLength; i += 4) {
-    sumPower += Math.pow(10, freqData[i] / 10);
+    sumPower += Math.exp(freqData[i] * 0.2302585092994046);
     sampleCount++;
   }
   const avgDb = 10 * Math.log10(sumPower / sampleCount);
