@@ -487,7 +487,15 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
     if (s.toneEnabled) {
       // Need to re-create if switching between noise (BufferSource) and oscillator or if type changed
       let type = d.toneType.value || "sine";
-      let isNoise = ["white", "pink", "brown", "rain", "wind", "ocean", "softwhite"].includes(type);
+      let isNoise = [
+        "white",
+        "pink",
+        "brown",
+        "rain",
+        "wind",
+        "ocean",
+        "softwhite",
+      ].includes(type);
       let currentIsNoise = s.toneOsc && !s.toneOsc.frequency;
 
       if (s.toneOsc && (isNoise !== currentIsNoise || type !== s.toneType)) {
@@ -500,7 +508,9 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
           s.toneFilter = null;
         }
         if (s.toneModulator) {
-          try { s.toneModulator.stop(); } catch (e) {}
+          try {
+            s.toneModulator.stop();
+          } catch (e) {}
           s.toneModulator.disconnect();
           s.toneModulator = null;
         }
@@ -509,7 +519,9 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
           s.toneModGain = null;
         }
         if (s.toneModulator2) {
-          try { s.toneModulator2.stop(); } catch (e) {}
+          try {
+            s.toneModulator2.stop();
+          } catch (e) {}
           s.toneModulator2.disconnect();
           s.toneModulator2 = null;
         }
@@ -548,12 +560,18 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
             let lastOut = 0.0;
             for (let i = 0; i < bufferSize; i++) {
               let white = Math.random() * 2 - 1;
-              lastOut = (lastOut + (0.02 * white)) / 1.002;
+              lastOut = (lastOut + 0.02 * white) / 1.002;
               output[i] = lastOut * 3.5;
             }
           } else {
             // Simplified Pink Noise
-            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+            let b0 = 0,
+              b1 = 0,
+              b2 = 0,
+              b3 = 0,
+              b4 = 0,
+              b5 = 0,
+              b6 = 0;
             for (let i = 0; i < bufferSize; i++) {
               let white = Math.random() * 2 - 1;
               b0 = 0.99886 * b0 + white * 0.0555179;
