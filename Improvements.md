@@ -16,7 +16,7 @@ Benchmarking freezes realtime analysis
 
 Rendering time and FPS don't match
 
-Snapshot/Microphone audio spectrum wave don't match/is not full width when sidebar collapsed - overdoing frequency analysis going over intended range. Might not be caluculating oversized frequency range, but probably just a problem with displaying/caluculation of resizing.
+[x] Snapshot/Microphone audio spectrum wave don't match/is not full width when sidebar collapsed - overdoing frequency analysis going over intended range. Might not be caluculating oversized frequency range, but probably just a problem with displaying/caluculation of resizing.
 
 Dragging over spectrum both point blue shade to mic spectrum - should not happen, only should happen on mic spectrum - also, audio playback is not working
 

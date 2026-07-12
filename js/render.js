@@ -120,8 +120,11 @@ function buildFrameData({ state, dom, processAudioPlayer = false }) {
 
   let linearBarWidthActual = 1;
 
-  if (wSpec > 0) {
-    const linearBarWidth = wSpec / (linearRange / hzPerBin);
+  const micSpecWidth = dom.canvasSpectrum?.clientWidth || wSpec;
+  const micSpecHeight = dom.canvasSpectrum?.clientHeight || hSpec;
+
+  if (micSpecWidth > 0) {
+    const linearBarWidth = micSpecWidth / (linearRange / hzPerBin);
     linearBarWidthActual =
       linearBarWidth > 2 ? linearBarWidth - 1 : linearBarWidth;
   }
@@ -134,8 +137,8 @@ function buildFrameData({ state, dom, processAudioPlayer = false }) {
   }
 
   return {
-    wSpec,
-    hSpec,
+    wSpec: micSpecWidth,
+    hSpec: micSpecHeight,
     wWave,
     hWave,
     bufferLength,

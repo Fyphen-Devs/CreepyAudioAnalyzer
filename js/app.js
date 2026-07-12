@@ -46,6 +46,8 @@ export async function initApp() {
     if (dom.spectrumView) state.spectrumView = dom.spectrumView.value;
     if (dom.peakHoldInf) state.peakHoldInf = dom.peakHoldInf.checked;
 
+    state.overlayDirty = true;
+
     console.log(
       "syncConfig",
       state.config.freqMinLog,
@@ -95,6 +97,7 @@ export async function initApp() {
         state.config.hVec = dom.canvasVectorscope.height / dpr || 0;
       }
     }
+    state.overlayDirty = true;
   };
 
   const setupCanvasMouseEvents = (el, isAudioCanvas) => {

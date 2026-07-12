@@ -345,7 +345,7 @@ export function drawSpectrogram({ dom, frame, state }) {
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
   const ctxOvl = dom.ctxSpectrogramOverlay;
-  if (ctxOvl && dom.canvasSpectrogramOverlay) {
+  if (ctxOvl && dom.canvasSpectrogramOverlay && state.overlayDirty) {
     const W = wSpecg;
     const H = hSpecg;
 
@@ -427,5 +427,6 @@ export function drawSpectrogram({ dom, frame, state }) {
         }
       }
     }
+    state.overlayDirty = false;
   }
 }

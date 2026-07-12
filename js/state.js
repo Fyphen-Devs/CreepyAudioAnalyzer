@@ -28,9 +28,14 @@ export function createInitialState() {
 
     // Tone Generator States
     toneEnabled: false,
+    toneType: null,
     toneOsc: null,
     toneGain: null,
     tonePan: null,
+    toneModulator: null,
+    toneModGain: null,
+    toneModulator2: null,
+    toneModGain2: null,
 
     // Noise Calibration & Analysis
     noiseProfile: null,
@@ -59,6 +64,7 @@ export function createInitialState() {
     lastDrawTime: 0,
     fpsFrameCount: 0,
     lastFpsTime: 0,
+    overlayDirty: true,
 
     freqDataBuffer: null,
     timeDataBuffer: null,

@@ -44,6 +44,7 @@ export function initBottomPlayer() {
     const wasEmpty = playlist.length === 0;
     playlist = playlist.concat(files);
 
+    updatePlayerControls();
     renderPlaylist();
 
     if (wasEmpty) {
@@ -60,6 +61,14 @@ export function initBottomPlayer() {
   });
 
   setupEqualizer();
+
+  function updatePlayerControls() {
+    const hasTracks = playlist.length > 0;
+    btnPrev.disabled = playlist.length <= 1;
+    btnNext.disabled = playlist.length <= 1;
+    btnPlay.disabled = !hasTracks;
+    progress.disabled = !hasTracks;
+  }
 
   function renderPlaylist() {
     playlistEl.innerHTML = "";
@@ -159,6 +168,7 @@ export function initBottomPlayer() {
     }
 
     playlist.splice(index, 1);
+    updatePlayerControls();
 
     if (playlist.length === 0) {
       audio.pause();
@@ -168,10 +178,6 @@ export function initBottomPlayer() {
       timeCurrent.textContent = "0:00";
       timeTotal.textContent = "0:00";
       progress.value = 0;
-      btnPrev.disabled = true;
-      btnNext.disabled = true;
-      btnPlay.disabled = true;
-      progress.disabled = true;
       updatePlayButton();
     } else {
       if (index === currentIndex) {
@@ -371,10 +377,7 @@ export function initBottomPlayer() {
         console.error("Playback error:", err);
       });
 
-    btnPrev.disabled = playlist.length <= 1;
-    btnNext.disabled = playlist.length <= 1;
-    btnPlay.disabled = false;
-    progress.disabled = false;
+    updatePlayerControls();
 
     renderPlaylist();
   }

@@ -485,24 +485,51 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
     if (!s.audioCtx) return;
 
     if (s.toneEnabled) {
-      // Need to re-create if switching between noise (BufferSource) and oscillator
+      // Need to re-create if switching between noise (BufferSource) and oscillator or if type changed
       let type = d.toneType.value || "sine";
-      let isNoise = type === "white" || type === "pink";
+      let isNoise = ["white", "pink", "brown", "rain", "wind", "ocean", "softwhite"].includes(type);
       let currentIsNoise = s.toneOsc && !s.toneOsc.frequency;
 
-      if (s.toneOsc && isNoise !== currentIsNoise) {
+      if (s.toneOsc && (isNoise !== currentIsNoise || type !== s.toneType)) {
         try {
           s.toneOsc.stop();
         } catch (e) {}
         s.toneOsc.disconnect();
+        if (s.toneFilter) {
+          s.toneFilter.disconnect();
+          s.toneFilter = null;
+        }
+        if (s.toneModulator) {
+          try { s.toneModulator.stop(); } catch (e) {}
+          s.toneModulator.disconnect();
+          s.toneModulator = null;
+        }
+        if (s.toneModGain) {
+          s.toneModGain.disconnect();
+          s.toneModGain = null;
+        }
+        if (s.toneModulator2) {
+          try { s.toneModulator2.stop(); } catch (e) {}
+          s.toneModulator2.disconnect();
+          s.toneModulator2 = null;
+        }
+        if (s.toneModGain2) {
+          s.toneModGain2.disconnect();
+          s.toneModGain2 = null;
+        }
         s.toneOsc = null;
       }
+
+      s.toneType = type;
 
       if (!s.toneOsc) {
         s.toneGain = s.audioCtx.createGain();
         s.tonePan = s.audioCtx.createStereoPanner();
         s.tonePan.connect(s.toneGain);
         s.toneGain.connect(s.audioCtx.destination);
+        if (s.audioPlayerAnalyser) {
+          s.toneGain.connect(s.audioPlayerAnalyser);
+        }
 
         if (isNoise) {
           const bufferSize = 2 * s.audioCtx.sampleRate; // 2 seconds
@@ -513,19 +540,20 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
           );
           const output = noiseBuffer.getChannelData(0);
 
-          if (type === "white") {
+          if (type === "white" || type === "softwhite") {
             for (let i = 0; i < bufferSize; i++) {
               output[i] = Math.random() * 2 - 1;
             }
+          } else if (type === "brown") {
+            let lastOut = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+              let white = Math.random() * 2 - 1;
+              lastOut = (lastOut + (0.02 * white)) / 1.002;
+              output[i] = lastOut * 3.5;
+            }
           } else {
             // Simplified Pink Noise
-            let b0 = 0,
-              b1 = 0,
-              b2 = 0,
-              b3 = 0,
-              b4 = 0,
-              b5 = 0,
-              b6 = 0;
+            let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
             for (let i = 0; i < bufferSize; i++) {
               let white = Math.random() * 2 - 1;
               b0 = 0.99886 * b0 + white * 0.0555179;
@@ -543,7 +571,71 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
           s.toneOsc = s.audioCtx.createBufferSource();
           s.toneOsc.buffer = noiseBuffer;
           s.toneOsc.loop = true;
-          s.toneOsc.connect(s.tonePan);
+
+          if (type === "softwhite") {
+            s.toneFilter = s.audioCtx.createBiquadFilter();
+            s.toneFilter.type = "lowpass";
+            s.toneFilter.frequency.value = 1000;
+            s.toneOsc.connect(s.toneFilter);
+            s.toneFilter.connect(s.tonePan);
+          } else if (type === "rain") {
+            s.toneFilter = s.audioCtx.createBiquadFilter();
+            s.toneFilter.type = "highpass";
+            s.toneFilter.frequency.value = 1000;
+            s.toneOsc.connect(s.toneFilter);
+            s.toneFilter.connect(s.tonePan);
+          } else if (type === "wind") {
+            s.toneFilter = s.audioCtx.createBiquadFilter();
+            s.toneFilter.type = "lowpass";
+            s.toneFilter.frequency.value = 500;
+            s.toneOsc.connect(s.toneFilter);
+            s.toneFilter.connect(s.tonePan);
+
+            // Modulation for wind
+            const mod = s.audioCtx.createOscillator();
+            const modGain = s.audioCtx.createGain();
+            mod.type = "sine";
+            mod.frequency.value = 0.2; // Slow modulation
+            modGain.gain.value = 400; // Modulate frequency by +/- 400Hz
+            mod.connect(modGain);
+            modGain.connect(s.toneFilter.frequency);
+            mod.start();
+            s.toneModulator = mod;
+            s.toneModGain = modGain;
+          } else if (type === "ocean") {
+            s.toneFilter = s.audioCtx.createBiquadFilter();
+            s.toneFilter.type = "lowpass";
+            s.toneFilter.frequency.value = 400;
+            s.toneOsc.connect(s.toneFilter);
+            s.toneFilter.connect(s.tonePan);
+
+            // Frequency modulation
+            const modF = s.audioCtx.createOscillator();
+            const modFGain = s.audioCtx.createGain();
+            modF.type = "sine";
+            modF.frequency.value = 0.1; // Very slow
+            modFGain.gain.value = 300;
+            modF.connect(modFGain);
+            modFGain.connect(s.toneFilter.frequency);
+            modF.start();
+            s.toneModulator = modF;
+            s.toneModGain = modFGain;
+
+            // Gain modulation for the "wave" effect
+            const modG = s.audioCtx.createOscillator();
+            const modGGain = s.audioCtx.createGain();
+            modG.type = "sine";
+            modG.frequency.value = 0.1;
+            modGGain.gain.value = 0.3; // Modulate gain by 30%
+            modG.connect(modGGain);
+            modGGain.connect(s.toneGain.gain);
+            modG.start();
+            s.toneModulator2 = modG;
+            s.toneModGain2 = modGGain;
+          } else {
+            s.toneOsc.connect(s.tonePan);
+          }
+
           s.toneOsc.start();
         } else {
           s.toneOsc = s.audioCtx.createOscillator();
@@ -602,6 +694,10 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
           s.toneOsc.stop();
         } catch (e) {}
         s.toneOsc.disconnect();
+        if (s.toneFilter) {
+          s.toneFilter.disconnect();
+          s.toneFilter = null;
+        }
         if (s.toneGain) s.toneGain.disconnect();
         if (s.tonePan) s.tonePan.disconnect();
         s.toneOsc = null;
