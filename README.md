@@ -24,7 +24,7 @@ AeroSpec is a web-based, real-time, high-precision audio analysis tool that requ
 
 ### 🎛️ Diagnostic Tools
 
-- **Test Tone Generator**: Generate Sine, Square, Sawtooth, or Triangle waves. Real-time control of frequency, panning, and gain.
+- **Test Tone Generator**: Generate Sine, Square, Sawtooth, Triangle, noise ambiences, sweep, and a psychoacoustic creepy mode with low-frequency rumble. Real-time control of frequency, panning, and gain.
 - **Level Meter**: Independent Left/Right peak level monitoring.
 - **Performance Benchmark**: Measure your device's rendering performance (FPS and average processing time in ms) to ensure real-time accuracy.
 

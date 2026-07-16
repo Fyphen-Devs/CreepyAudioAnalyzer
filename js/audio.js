@@ -656,15 +656,66 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
 
           s.toneOsc.start();
         } else {
-          s.toneOsc = s.audioCtx.createOscillator();
-          s.toneOsc.connect(s.tonePan);
-          s.toneOsc.frequency.value = parseFloat(d.toneFreq.value);
-          s.toneOsc.start();
+          if (type === "creepy") {
+            // Psychoacoustic fear profile:
+            // - low-frequency rumble (~36 Hz)
+            // - rough high band (~1700 Hz) with ~19 Hz modulation
+            s.toneOsc = s.audioCtx.createOscillator();
+            s.toneOsc.connect(s.tonePan);
+            s.toneOsc.start();
+
+            const roughOsc = s.audioCtx.createOscillator();
+            const roughGain = s.audioCtx.createGain();
+            roughOsc.connect(roughGain);
+            roughGain.connect(s.tonePan);
+            roughOsc.start();
+            s.toneModulator = roughOsc;
+            s.toneModGain = roughGain;
+
+            const roughLfo = s.audioCtx.createOscillator();
+            const roughLfoGain = s.audioCtx.createGain();
+            roughLfo.connect(roughLfoGain);
+            roughLfoGain.connect(s.toneModGain.gain);
+            roughLfo.start();
+            s.toneModulator2 = roughLfo;
+            s.toneModGain2 = roughLfoGain;
+          } else {
+            s.toneOsc = s.audioCtx.createOscillator();
+            s.toneOsc.connect(s.tonePan);
+            s.toneOsc.frequency.value = parseFloat(d.toneFreq.value);
+            s.toneOsc.start();
+          }
         }
       }
 
       if (s.toneOsc.frequency) {
-        if (type === "sweep") {
+        if (type === "creepy") {
+          if (s.sweepInterval) {
+            clearInterval(s.sweepInterval);
+            s.sweepInterval = null;
+          }
+          const now = s.audioCtx.currentTime;
+          s.toneOsc.type = "triangle";
+          s.toneOsc.detune.setTargetAtTime(-8, now, 0.1);
+          s.toneOsc.frequency.cancelScheduledValues(now);
+          s.toneOsc.frequency.setTargetAtTime(36, now, 0.1);
+
+          if (s.toneModulator && s.toneModGain) {
+            s.toneModulator.type = "sawtooth";
+            s.toneModulator.frequency.cancelScheduledValues(now);
+            s.toneModulator.frequency.setTargetAtTime(1700, now, 0.1);
+            s.toneModGain.gain.cancelScheduledValues(now);
+            s.toneModGain.gain.setTargetAtTime(0.07, now, 0.1);
+          }
+
+          if (s.toneModulator2 && s.toneModGain2) {
+            s.toneModulator2.type = "sine";
+            s.toneModulator2.frequency.cancelScheduledValues(now);
+            s.toneModulator2.frequency.setTargetAtTime(19, now, 0.1);
+            s.toneModGain2.gain.cancelScheduledValues(now);
+            s.toneModGain2.gain.setTargetAtTime(0.035, now, 0.1);
+          }
+        } else if (type === "sweep") {
           s.toneOsc.type = "sine";
           // Start 3-second sweep
           const now = s.audioCtx.currentTime;
@@ -715,6 +766,28 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
         if (s.toneFilter) {
           s.toneFilter.disconnect();
           s.toneFilter = null;
+        }
+        if (s.toneModulator) {
+          try {
+            s.toneModulator.stop();
+          } catch (e) {}
+          s.toneModulator.disconnect();
+          s.toneModulator = null;
+        }
+        if (s.toneModGain) {
+          s.toneModGain.disconnect();
+          s.toneModGain = null;
+        }
+        if (s.toneModulator2) {
+          try {
+            s.toneModulator2.stop();
+          } catch (e) {}
+          s.toneModulator2.disconnect();
+          s.toneModulator2 = null;
+        }
+        if (s.toneModGain2) {
+          s.toneModGain2.disconnect();
+          s.toneModGain2 = null;
         }
         if (s.toneGain) s.toneGain.disconnect();
         if (s.tonePan) s.tonePan.disconnect();
