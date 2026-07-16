@@ -679,6 +679,29 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
             roughLfo.start();
             s.toneModulator2 = roughLfo;
             s.toneModGain2 = roughLfoGain;
+          } else if (type === "creepylow") {
+            // Low-only fear profile:
+            // - deep bass fundamental with a nearby bass layer for beating
+            // - very slow pitch drift to keep it unsettling
+            s.toneOsc = s.audioCtx.createOscillator();
+            s.toneOsc.connect(s.tonePan);
+            s.toneOsc.start();
+
+            const bassLayerOsc = s.audioCtx.createOscillator();
+            const bassLayerGain = s.audioCtx.createGain();
+            bassLayerOsc.connect(bassLayerGain);
+            bassLayerGain.connect(s.tonePan);
+            bassLayerOsc.start();
+            s.toneModulator = bassLayerOsc;
+            s.toneModGain = bassLayerGain;
+
+            const driftLfo = s.audioCtx.createOscillator();
+            const driftDepth = s.audioCtx.createGain();
+            driftLfo.connect(driftDepth);
+            driftDepth.connect(s.toneOsc.frequency);
+            driftLfo.start();
+            s.toneModulator2 = driftLfo;
+            s.toneModGain2 = driftDepth;
           } else {
             s.toneOsc = s.audioCtx.createOscillator();
             s.toneOsc.connect(s.tonePan);
@@ -714,6 +737,32 @@ export function createAudioController({ state, dom, resizeCanvases, draw }) {
             s.toneModulator2.frequency.setTargetAtTime(19, now, 0.1);
             s.toneModGain2.gain.cancelScheduledValues(now);
             s.toneModGain2.gain.setTargetAtTime(0.035, now, 0.1);
+          }
+        } else if (type === "creepylow") {
+          if (s.sweepInterval) {
+            clearInterval(s.sweepInterval);
+            s.sweepInterval = null;
+          }
+          const now = s.audioCtx.currentTime;
+          s.toneOsc.type = "sine";
+          s.toneOsc.detune.setTargetAtTime(0, now, 0.1);
+          s.toneOsc.frequency.cancelScheduledValues(now);
+          s.toneOsc.frequency.setTargetAtTime(28, now, 0.1);
+
+          if (s.toneModulator && s.toneModGain) {
+            s.toneModulator.type = "sine";
+            s.toneModulator.frequency.cancelScheduledValues(now);
+            s.toneModulator.frequency.setTargetAtTime(33, now, 0.1);
+            s.toneModGain.gain.cancelScheduledValues(now);
+            s.toneModGain.gain.setTargetAtTime(0.42, now, 0.1);
+          }
+
+          if (s.toneModulator2 && s.toneModGain2) {
+            s.toneModulator2.type = "sine";
+            s.toneModulator2.frequency.cancelScheduledValues(now);
+            s.toneModulator2.frequency.setTargetAtTime(0.14, now, 0.1);
+            s.toneModGain2.gain.cancelScheduledValues(now);
+            s.toneModGain2.gain.setTargetAtTime(1.6, now, 0.1);
           }
         } else if (type === "sweep") {
           s.toneOsc.type = "sine";
